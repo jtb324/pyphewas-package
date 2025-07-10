@@ -6,6 +6,24 @@ import adjustText
 import seaborn as sns
 
 
+def generate_plot() -> None:
+    data = pl.read_csv(
+        "/data100t1/home/james/code_projects/PyPheWAS/tests/output/potential_mito_cases_SD_phewas_7_3_25_v4.txt.gz",
+        separator="\t",
+        columns=[
+            "phecode",
+            "phecode_description",
+            "phecode_category",
+            "case_count",
+            "control_count",
+            "converged",
+            "status_pvalue",
+        ],
+    )
+
+    print(data.head())
+
+
 class PlotBuilder: ...
 
 

@@ -292,7 +292,8 @@ def restrict_covars_to_specific_sex(
         male_coding = 0
         female_coding = 1
     # Now we can filter to either male only or female only
-    if sex_option == "female_only":
+
+    if sex_option.lower() == "female-only":
         output_df = covar_df.filter(pl.col(sex_col) == female_coding)
     else:
         output_df = covar_df.filter(pl.col(sex_col) == male_coding)
@@ -314,6 +315,17 @@ def main() -> None:
     if args.run_sex_specific and not args.sex_col and not args.male_as_one:
         parser.error(
             f"Detected a provided value of {args.run_sex_specific} for the '--run-sex-specific' flag, but a value was not provided for the '--sex-col' flag or the '--male-as-one' flag. All three flags are required to run a sex specific analysis."
+        )
+
+    # we also need to make sure that the sex columns is not
+    # in the list of covariates.
+    if ( # Because args.covariate_list can be none we need to use short circuiting logic. If 
+        args.covariate_list #args.covariate_list == None and we try to use the in operator then the code will raise an error
+        and args.sex_col in args.covariate_list # to avoid this we check if the covariate list is not none by checking 
+        and args.run_sex_specific # for a truth value first
+    ):
+        parser.error(
+            f"detected that the sex or gender column, {args.sex_col}, was also passed as a covariate. If you are trying to run a sex specific analysis please make sure you remove the sex or gender column from the analysis."
         )
 
     # getting the programs start time
@@ -371,6 +383,7 @@ def main() -> None:
             covariates_df, args.run_sex_specific, args.sex_col, args.male_as_one
         )
 
+    print(covariates_df.select(pl.col("EHR_GENDER").value_counts()))
     print("initializing multiprocessing" * (min(args.cpus - 1, 1)))
 
     item_count = len(phecode_cases.keys())

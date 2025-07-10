@@ -103,8 +103,8 @@ def generate_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--male-as-one",
         default=True,
-        help="Flag indicating whether males are labeled as 1 and females are labeled as 0 or vice versa.",
-        action="store_true",
+        type=bool,
+        help="Flag indicating whether males are labeled as 1 and females are labeled as 0 or vice versa. %(default)s",
     )
 
     parser.add_argument(
