@@ -1,6 +1,6 @@
 [project]
 name = "pyphewas-package"
-version = "0.2.1-alpha"
+version = "0.2.2-alpha"
 description = "CLI tool to run a PheWAS"
 authors = [
     { name = "James Baker", email = "james.baker@vanderbilt.edu" },

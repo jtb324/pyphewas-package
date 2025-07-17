@@ -1,5 +1,6 @@
 import argparse
 from rich_argparse import RichHelpFormatter
+from importlib.metadata import version
 from pathlib import Path
 
 
@@ -111,6 +112,12 @@ def generate_parser() -> argparse.ArgumentParser:
         "--sex-col",
         type=str,
         help="Column name of the column in the covariates file that contains information about sex for each individual. This argument only needs to be provided if the user is using the '--run-sex-specific' flag. If this argument is passed and the '--run-sex-specific' flag is not provided then the program will ignore this flag. If there are people with missing sex values in the covariates file then they will be implicited filtered out of the analysis",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s: {version('pyphewas-package')}",
     )
 
     return parser

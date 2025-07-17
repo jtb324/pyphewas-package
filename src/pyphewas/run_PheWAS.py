@@ -149,66 +149,75 @@ def run_logit_regression(
 
     phecode_name, phecode_obj = phecode_info[0]
 
-    if len(phecode_obj.cases) >= min_case_count:
-        covariates_df = covariates.filter(
-            ~pl.col(sample_colname).is_in(phecode_obj.exclusions)
-        ).with_columns(
-            pl.when(pl.col(sample_colname).is_in(phecode_obj.cases))
-            .then(1)
-            .otherwise(0)
-            .alias("phecode_status")
-        )
+    covariates_df = covariates.filter(
+        ~pl.col(sample_colname).is_in(phecode_obj.exclusions)
+    ).with_columns(
+        pl.when(pl.col(sample_colname).is_in(phecode_obj.cases))
+        .then(1)
+        .otherwise(0)
+        .alias("phecode_status")
+    )  # Note that anyone here who was not in the counts file (and therefore is
+    # not a case or exclusions) will be a control. This means if the individual
+    # has no count for any phecode then they will be considered a control
 
-        # When doing the sex stratified analysis there is a chance that there will be no cases
-        # despite how there were originally cases. We need to account for that here.
-        if len(covariates_df.select(pl.col("phecode_status").value_counts())) == 1:
+    # This check ensures that the number of cases is >= to the minimum case count.
+    # There is already a check for case count when the case and exclusions are read in,
+    # but this check fails if there are people in the counts file that are not in the
+    # covariate file (pyphewas uses the covariate file to build the cohort). When there
+    # are extract individuals in the counts file then the case count can be higher than
+    # it would be in the cohort
+    if covariates_df.select(pl.col("phecode_status")).sum().item() < min_case_count:
+        return
+    # When doing the sex stratified analysis there is a chance that there will be no cases
+    # despite how there were originally cases. We need to account for that here.
+    if len(covariates_df.select(pl.col("phecode_status").value_counts())) == 1:
+        return
+    # lets get the counts of cases and controls (This is verbose but adapted from the
+    # stackoverflow answer: https://stackoverflow.com/questions/78057705/is-there-a-simple-way-to-access-a-value-in-a-polars-struct)
+    case_count = (
+        covariates_df.select(pl.col("phecode_status").value_counts())
+        .filter(pl.col("phecode_status").struct["phecode_status"] == 1)
+        .item()["count"]
+    )
+    control_count = (
+        covariates_df.select(pl.col("phecode_status").value_counts())
+        .filter(pl.col("phecode_status").struct["phecode_status"] == 0)
+        .item()["count"]
+    )
+
+    # run the regression
+    try:
+        result = smf.logit(analysis_str, data=covariates_df).fit(disp=0)
+    except (
+        LinAlgError,
+        PerfectSeparationError,
+        RuntimeWarning,
+        PerfectSeparationWarning,
+    ) as err:
+        # If a perfect separation error occurs then we
+        if (
+            "Singular matrix" in str(err)
+            or "Perfect separation" in str(err)
+            or "overflow encountered in exp" in str(err)
+        ):
+            print(
+                f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
+            )
             return
-        # lets get the counts of cases and controls (This is verbose but adapted from the
-        # stackoverflow answer: https://stackoverflow.com/questions/78057705/is-there-a-simple-way-to-access-a-value-in-a-polars-struct)
-        case_count = (
-            covariates_df.select(pl.col("phecode_status").value_counts())
-            .filter(pl.col("phecode_status").struct["phecode_status"] == 1)
-            .item()["count"]
-        )
-        control_count = (
-            covariates_df.select(pl.col("phecode_status").value_counts())
-            .filter(pl.col("phecode_status").struct["phecode_status"] == 0)
-            .item()["count"]
-        )
+        else:
+            raise err
+    # except ConvergenceWarning as con_err:
+    #     print(
+    #         f"The model for the PheCode, {phecode_name}, failed to converge. This model had {case_count} cases and {control_count} controls."
+    #     )
 
-        # run the regression
-        try:
-            result = smf.logit(analysis_str, data=covariates_df).fit(disp=0)
-        except (
-            LinAlgError,
-            PerfectSeparationError,
-            RuntimeWarning,
-            PerfectSeparationWarning,
-        ) as err:
-            # If a perfect separation error occurs then we
-            if (
-                "Singular matrix" in str(err)
-                or "Perfect separation" in str(err)
-                or "overflow encountered in exp" in str(err)
-            ):
-                print(
-                    f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
-                )
-                return
-            else:
-                raise err
-        # except ConvergenceWarning as con_err:
-        #     print(
-        #         f"The model for the PheCode, {phecode_name}, failed to converge. This model had {case_count} cases and {control_count} controls."
-        #     )
+    formatted_results = _format_results(result)
 
-        formatted_results = _format_results(result)
+    # Lets add the counts to the results dictionary
+    formatted_results["case_count"] = case_count
+    formatted_results["control_count"] = control_count
 
-        # Lets add the counts to the results dictionary
-        formatted_results["case_count"] = case_count
-        formatted_results["control_count"] = control_count
-
-        return_dictionary[phecode_name] = formatted_results
+    return_dictionary[phecode_name] = formatted_results
 
 
 def _generate_header(
@@ -436,8 +445,11 @@ def main() -> None:
 
         phecodes_tested = len(managed_dict)
 
-        print(f"{phecodes_tested} phecodes successfully tested")
-        bonferroni = 0.05 / phecodes_tested
+        if phecodes_tested == 0:
+            print("No phecodes were successfully tested. terminating program")
+            sys.exit(1)
+        else:
+            bonferroni = 0.05 / phecodes_tested
         print(
             f"recommend Bonferroni correction: {bonferroni} or {-np.log10(bonferroni)} on a -log10 scale"
         )
