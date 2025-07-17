@@ -159,6 +159,10 @@ def run_logit_regression(
             .alias("phecode_status")
         )
 
+        # When doing the sex stratified analysis there is a chance that there will be no cases
+        # despite how there were originally cases. We need to account for that here.
+        if len(covariates_df.select(pl.col("phecode_status").value_counts())) == 1:
+            return
         # lets get the counts of cases and controls (This is verbose but adapted from the
         # stackoverflow answer: https://stackoverflow.com/questions/78057705/is-there-a-simple-way-to-access-a-value-in-a-polars-struct)
         case_count = (
@@ -319,10 +323,11 @@ def main() -> None:
 
     # we also need to make sure that the sex columns is not
     # in the list of covariates.
-    if ( # Because args.covariate_list can be none we need to use short circuiting logic. If 
-        args.covariate_list #args.covariate_list == None and we try to use the in operator then the code will raise an error
-        and args.sex_col in args.covariate_list # to avoid this we check if the covariate list is not none by checking 
-        and args.run_sex_specific # for a truth value first
+    if (  # Because args.covariate_list can be none we need to use short circuiting logic. If
+        args.covariate_list  # args.covariate_list == None and we try to use the in operator then the code will raise an error
+        and args.sex_col
+        in args.covariate_list  # to avoid this we check if the covariate list is not none by checking
+        and args.run_sex_specific  # for a truth value first
     ):
         parser.error(
             f"detected that the sex or gender column, {args.sex_col}, was also passed as a covariate. If you are trying to run a sex specific analysis please make sure you remove the sex or gender column from the analysis."
@@ -383,7 +388,6 @@ def main() -> None:
             covariates_df, args.run_sex_specific, args.sex_col, args.male_as_one
         )
 
-    print(covariates_df.select(pl.col("EHR_GENDER").value_counts()))
     print("initializing multiprocessing" * (min(args.cpus - 1, 1)))
 
     item_count = len(phecode_cases.keys())
