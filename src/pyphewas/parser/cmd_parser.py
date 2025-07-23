@@ -80,6 +80,13 @@ def generate_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--max-iterations",
+        type=int,
+        default=200,
+        help="Maximum number of iterations for the model to go through before it converges. If the model doesn't converge after this value then a ConvergenceWarning will be thrown. Default: %(default)s",
+    )
+
+    parser.add_argument(
         "--phecode-version",
         type=str,
         required=True,

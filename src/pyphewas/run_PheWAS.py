@@ -145,6 +145,7 @@ def run_logit_regression(
     analysis_str: str,
     sample_colname: str,
     min_case_count: int,
+    max_iteration_threshold: int,
 ) -> None:
 
     phecode_name, phecode_obj = phecode_info[0]
@@ -187,7 +188,9 @@ def run_logit_regression(
 
     # run the regression
     try:
-        result = smf.logit(analysis_str, data=covariates_df).fit(disp=0)
+        result = smf.logit(analysis_str, data=covariates_df).fit(
+            disp=0, maxiter=max_iteration_threshold
+        )
     except (
         LinAlgError,
         PerfectSeparationError,
@@ -382,6 +385,9 @@ def main() -> None:
     print(
         f"Requiring {args.min_case_count} cases for a phecode to be included in the analysis"
     )
+    print(
+        f"using a maximum number of {args.max_iterations} iterations for the logistic regression model"
+    )
     print(f"{80*'~'}\n")
     print(f"Loading in the phecode descriptions found here: {phecode_descriptions}")
 
@@ -426,6 +432,7 @@ def main() -> None:
             analysis_str=model_str,
             sample_colname=args.sample_col,
             min_case_count=args.min_case_count,
+            max_iteration_threshold=args.max_iterations,
         )
         try:
             for r in pool.imap(
