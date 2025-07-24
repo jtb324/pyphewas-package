@@ -186,6 +186,9 @@ def run_logit_regression(
         .item()["count"]
     )
 
+    # We can calculate exclusions by subtracting the final shape from the original shape
+    exclusion_count = covariates.shape[0] - covariates_df.shape[0]
+
     # run the regression
     try:
         result = smf.logit(analysis_str, data=covariates_df).fit(
@@ -219,7 +222,7 @@ def run_logit_regression(
     # Lets add the counts to the results dictionary
     formatted_results["case_count"] = case_count
     formatted_results["control_count"] = control_count
-
+    formatted_results["exclusion_count"] = exclusion_count
     return_dictionary[phecode_name] = formatted_results
 
 
@@ -235,7 +238,7 @@ def _generate_header(
     else:  # otherwise the string starts with phecode and uses the status name we provided
         phecode_name_str = "phecode"
 
-    header_str = f"{phecode_name_str}\tphecode_description\tphecode_category\tcase_count\tcontrol_count\tconverged"
+    header_str = f"{phecode_name_str}\tphecode_description\tphecode_category\tcase_count\tcontrol_count\texclusion_count\tconverged"
 
     header_str += f"\t{status_name}_pvalue"
     header_str += f"\t{status_name}_beta"
@@ -268,7 +271,7 @@ def _write_to_file(
             phecode_name, ("N/A", "N/A")
         )
 
-        output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}"
+        output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('exclusion_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}"
 
         # lets add all the values for the status to the string first
 
@@ -366,7 +369,7 @@ def main() -> None:
         phecode_descriptions = args.phecode_descriptions
 
     print(f"{35*'~'}  PheWAS  {35*'~'}")
-    print(f"analysis start time: {start_time}")
+    print(f"Analysis start time: {start_time}")
     print(
         f"Using the following covariates in the analysis: {', '.join(args.covariate_list if args.covariate_list else '')}"
     )
@@ -376,7 +379,7 @@ def main() -> None:
         print(f"Variable of interest column name: {args.status_col}")
     else:
         print(
-            f"Using the column, {args.status_col}, as a predictor. Every phecode in the provided counts file, {args.counts}, will be used as a predictor"
+            f"Using the column, {args.status_col}, as the outcome. Every phecode in the provided counts file, {args.counts}, will be used as a predictor"
         )
 
     print(
@@ -386,7 +389,7 @@ def main() -> None:
         f"Requiring {args.min_case_count} cases for a phecode to be included in the analysis"
     )
     print(
-        f"using a maximum number of {args.max_iterations} iterations for the logistic regression model"
+        f"Using a maximum number of {args.max_iterations} iterations for the logistic regression model"
     )
     print(f"{80*'~'}\n")
     print(f"Loading in the phecode descriptions found here: {phecode_descriptions}")
