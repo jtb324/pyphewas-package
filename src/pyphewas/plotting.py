@@ -1,588 +1,223 @@
+from typing_extensions import Format
 import numpy as np
-from pyphewas.parser import generate_parser
+import argparse
+from pathlib import Path
 import polars as pl
-from matplotlib import colormaps
+import matplotlib.pyplot as plt
 import adjustText
 import seaborn as sns
+from dataclasses import dataclass
 
 
-def generate_plot() -> None:
-    data = pl.read_csv(
-        "/data100t1/home/james/code_projects/PyPheWAS/tests/output/potential_mito_cases_SD_phewas_7_3_25_v4.txt.gz",
-        separator="\t",
-        columns=[
-            "phecode",
-            "phecode_description",
-            "phecode_category",
-            "case_count",
-            "control_count",
-            "converged",
-            "status_pvalue",
-        ],
+@dataclass
+class FormattedDf:
+    dataframe: pl.DataFrame
+    infinity_threshold: float
+
+
+def determine_color_palatte(category_count: int) -> list[tuple]:
+    """return the color palette based off of how many different phecode
+    categories there are
+
+    Parameters
+    ----------
+    category_count : int
+        number of unique phecode categories in the provided dataframe file
+
+    Returns
+    -------
+    list[tuple]
+        returns a list different colors to represent each phecodee category"""
+    if category_count <= 10:
+        distinct_palette = sns.color_palette("tab10", n_colors=category_count)
+    else:
+        distinct_palette = sns.color_palette("tab20", n_colors=category_count)
+
+    return distinct_palette
+
+
+def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> FormattedDf:
+    """format the provided data in the following ways: 1) only keep converged
+    values, 2) replace pvalues that were too significant and rounded to zero
+    to be 1.02 * the most significant pvalue,3) create a column that indicates
+    where the beta was negative or positive, 4) sort by phecode_category and
+    phecode_description columns, 5) and a row index column that will be used to
+    plot things on the x axis
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        dataframe that has the results from running the phewas.
+
+    pval_colname : str
+        name of the column that has the pvalue of interest
+
+    beta_colname : str
+        name of the column that has the beta for the vafriable of interest. We
+        will use this column to create another column of whether the betas are
+        negative or not
+
+    Returns
+    -------
+    pl.DataFrame
+        returns the dataframe frame with the aforementioned transformations
+    """
+    # Ensure that the provided df has the correct values
+    check_df_columns(df, pval_colname, beta_colname)
+
+    df = df.filter(pl.col("converged")).with_columns(
+        -np.log10(pl.col(pval_colname)).alias("neg_log10_p")
     )
 
-    print(data.head())
-
-
-class PlotBuilder: ...
-
-
-def _create_phecode_index(df) -> pl.DataFrame:
-    """
-    Create phecode index after grouping by phecode_category and phecode;
-    Phecode index will be used for plotting purpose
-    :param df: PheWAS result to create index
-    :return: same dataframe with column "phecode_index" created
-    """
-    if "phecode_index" in df.columns:
-        df = df.drop("phecode_index")
-
-    df = (
-        df.sort(by=["phecode_category", "phecode"])
-        .with_columns(pl.Series("phecode_index", range(1, len(df) + 1)))
-        .with_columns(15 * np.exp(pl.col("beta")).alias("marker_size_by_beta"))
+    max_finite_val = (
+        df.filter(pl.col("neg_log10_p").is_finite())
+        .select(pl.col("neg_log10_p").max())
+        .item()
+        * 1.02
     )
 
-    return df
+    print(f"replacing infinite values in the dataframe with {max_finite_val}")
 
-
-def _x_ticks(plot_df, selected_color_dict, size=8) -> None:
-    """
-    Generate x tick labels and colors
-    :param plot_df: plot data
-    :param selected_color_dict: color dict; this is changed based on number of phecode categories selected
-    :return: x tick labels and colors for the plot
-    """
-    x_ticks = (
-        plot_df[["phecode_category", "phecode_index"]]
-        .group_by("phecode_category")
-        .mean()
+    df = df.with_columns(
+        pl.when(~pl.col("neg_log10_p").is_finite())
+        .then(max_finite_val)
+        .otherwise(pl.col("neg_log10_p"))
+        .with_columns(
+            pl.when(pl.col(beta_colname) > 0)
+            .then(pl.lit("Positive"))
+            .otherwise(pl.lit("Negative"))
+            .alias("direction")
+        )
+        .sort(["phecode_category", "phecode_description"])
+        .with_row_index(name="index")
     )
-    # create x ticks labels and colors
-    adjustText.plt.xticks(
-        x_ticks["phecode_index"],
-        x_ticks["phecode_category"],
+
+    return FormattedDf(df, max_finite_val)
+
+
+def generate_manhatten(
+    formatted_results: FormattedDf,
+    output_filename: Path | str,
+    significance_threshold: float,
+    dpi: int = 300,
+    color_palette: list[tuple] | None = None,
+) -> None:
+
+    df = formatted_results.dataframe
+
+    plt.figure(figsize=(16, 9))
+
+    if color_palette is None:
+        color_palette = determine_color_palatte(len(df["category"].unique()))
+
+    # We need to format the dataframe
+    markers = {"Positive": "^", "Negative": "v"}
+
+    plot_data = df.to_pandas()
+
+    sns.scatterplot(
+        data=plot_data,
+        x="index",
+        y="neg_log10_p",
+        hue="category",
+        palette=color_palette,
+        style="direction",
+        markers=markers,
+        s=80,
+        alpha=1.0,  # Set alpha to 1.0 for maximum color saturation
+        edgecolor="black",  # Black edge helps separate the colors further
+        linewidth=0.5,
+    )
+
+    # Threshold lines
+    plt.axhline(
+        y=significance_threshold,
+        color="#ff0000",
+        linestyle="--",
+        linewidth=1.5,
+        label="Bonferroni",
+    )
+
+    plt.axhline(
+        y=formatted_results.infinity_threshold,
+        color="#1e90ff",
+        linestyle="--",
+        linewidth=1.5,
+        label="infinity_threshold",
+    )
+
+    # generate the differnt category labels so everything aligns correctly on the x-axis
+    label_df = (
+        df.group_by("phecode_category")
+        .agg(pl.col("index").median().alias("pos"))
+        .sort("pos")
+    )
+    plt.xticks(
+        label_df["pos"].to_list(),
+        label_df["category"].to_list(),
         rotation=45,
         ha="right",
-        weight="normal",
-        size=size,
+        fontsize=10,
     )
 
-    tick_labels = adjustText.plt.gca().get_xticklabels()
-    sorted_labels = sorted(tick_labels, key=lambda label: label.get_text())
-    for tick_label, tick_color in zip(sorted_labels, selected_color_dict.values()):
-        tick_label.set_color(tick_color)
-
-
-def _manhattan_scatter(self, ax, marker_size_by_beta, scale_factor=1):
-    """
-    Generate scatter data points
-    :param ax: plot object
-    :param marker_size_by_beta: adjust marker size by beta coefficient if True
-    :return: scatter plot of selected data
-    """
-
-    if marker_size_by_beta:
-        s_positive = self.positive_betas["_marker_size"] * scale_factor
-        s_negative = self.negative_betas["_marker_size"] * scale_factor
-    else:
-        s_positive = None
-        s_negative = None
-
-    ax.scatter(
-        x=self.positive_betas["phecode_index"].to_numpy(),
-        y=self.positive_betas["neg_log_p_value"],
-        s=s_positive,
-        c=self.positive_betas["label_color"],
-        marker="^",
-        alpha=self.positive_alpha,
+    plt.xlabel("Phecode Categories", fontsize=14)
+    plt.ylabel(r"$-\log_{10}(P)$", fontsize=14)
+    plt.title("PheWAS Results", fontsize=14)
+    plt.legend(
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+        borderaxespad=0,
+        title="Category / Direction",
     )
-
-    ax.scatter(
-        x=self.negative_betas["phecode_index"].to_numpy(),
-        y=self.negative_betas["neg_log_p_value"],
-        s=s_negative,
-        c=self.negative_betas["label_color"],
-        marker="v",
-        alpha=self.negative_alpha,
-    )
+    plt.tight_layout()
+    plt.savefig(output_filename, dpi=dpi, bbox_inches="tight", transparent=True)
 
 
-def _lines(
-    self,
-    ax,
-    plot_type,
-    plot_df,
-    x_col,
-    nominal_significance_line=False,
-    bonferroni_line=False,
-    infinity_line=False,
-    y_threshold_line=False,
-    y_threshold_value=None,
-    x_positive_threshold_line=False,
-    x_positive_threshold_value=None,
-    x_negative_threshold_line=False,
-    x_negative_threshold_value=None,
-):
+def check_df_columns(df: pl.DataFrame, pval_col: str, beta_col: str) -> None:
+    """check if the expected columns are in the dataframe. If the expected columns
+    are not then then we need to terminate the program
 
-    extra_offset = 0
-    if plot_type == "manhattan":
-        extra_offset = 1
-    elif plot_type == "volcano":
-        extra_offset = 0.05
+    Parameters
+    ----------
+    df : pl.DataFrame
+        dataframe that has the results from the phewas.
 
-    # nominal significance line
-    if nominal_significance_line:
-        ax.hlines(
-            y=-adjustText.np.log10(0.05),
-            xmin=plot_df[x_col].min() - self.offset - extra_offset,
-            xmax=plot_df[x_col].max() + self.offset + extra_offset,
-            colors="red",
-            lw=1,
-        )
+    pval_col : str
+        column that has the pvalues for the variable of interest
 
-    # bonferroni
-    if bonferroni_line:
-        ax.hlines(
-            y=self.bonferroni,
-            xmin=plot_df[x_col].min() - self.offset - extra_offset,
-            xmax=plot_df[x_col].max() + self.offset + extra_offset,
-            colors="green",
-            lw=1,
-        )
+    beta_col : str
+        column that has the betas for the variable of interest
 
-    # infinity
-    if infinity_line:
-        if self.inf_proxy is not None:
-            ax.yaxis.get_major_ticks()[-2].set_visible(False)
-            ax.hlines(
-                y=self.inf_proxy * 0.98,
-                xmin=plot_df[x_col].min() - self.offset - extra_offset,
-                xmax=plot_df[x_col].max() + self.offset + extra_offset,
-                colors="blue",
-                linestyle="dashdot",
-                lw=1,
-            )
-
-    # y threshold line
-    if y_threshold_line:
-        ax.hlines(
-            y=y_threshold_value,
-            xmin=plot_df[x_col].min() - self.offset - extra_offset,
-            xmax=plot_df[x_col].max() + self.offset + extra_offset,
-            colors="gray",
-            linestyles="dashed",
-            lw=1,
-        )
-
-    # vertical lines
-    if x_positive_threshold_line:
-        ax.vlines(
-            x=x_positive_threshold_value,
-            ymin=plot_df["neg_log_p_value"].min() - self.offset,
-            ymax=plot_df["neg_log_p_value"].max() + self.offset + 5,
-            colors="orange",
-            linestyles="dashed",
-            lw=1,
-        )
-    if x_negative_threshold_line:
-        ax.vlines(
-            x=x_negative_threshold_value,
-            ymin=plot_df["neg_log_p_value"].min() - self.offset,
-            ymax=plot_df["neg_log_p_value"].max() + self.offset + 5,
-            colors="lightseagreen",
-            linestyles="dashed",
-            lw=1,
-        )
-
-
-def _split_text(s, threshold=30):
+    Raises
+    ------
+    ValueError
+        if any of the expected columns are not found then we will raise a value error
+        telling the user what the expected columns are
     """
-    Split long text label
-    :param s: text string
-    :param threshold: approximate number of characters per line
-    :return: split text if longer than 40 chars
-    """
-    words = s.split(" ")
-    new_s = ""
-    line_length = 0
-    for word in words:
-        new_s += word
-        line_length += len(word)
-        if line_length >= threshold and word != words[-1]:
-            new_s += "\n"
-            line_length = 0
-        else:
-            new_s += " "
-
-    return new_s
-
-
-def _manhattan_label(
-    self,
-    plot_df,
-    label_values,
-    label_count,
-    label_categories=None,
-    label_text_column="phecode_string",
-    label_value_threshold=0,
-    label_split_threshold=30,
-    label_color="label_color",
-    label_size=8,
-    label_weight="normal",
-    y_col="neg_log_p_value",
-    x_col="phecode_index",
-):
-    """
-    :param plot_df: plot data
-    :param label_values: can take a single phecode, a list of phecodes,
-                            or preset values "positive_betas", "negative_betas", "p_value"
-    :param label_value_threshold: cutoff value for label values;
-                                    if label_values is "positive_beta", keep beta values >= cutoff
-                                    if label_values is "negative_beta", keep beta values <= cutoff
-                                    if label_values is "p_value", keep neg_log_p_value >= cutoff
-    :param label_text_column: defaults to "phecode_string"; name of column contain text for labels
-    :param label_count: number of items to label, only needed if label_by input is data type
-    :param label_split_threshold: number of characters to consider splitting long labels
-    :param label_color: string type; takes either a color or name of column contains color for plot data
-    :param label_size: defaults to 8
-    :param label_weight: takes standard plt weight inputs, e.g., "normal", "bold", etc.
-    :param x_col: column contains x values
-    :param y_col: column contains y values
-    :return: adjustText object
-    """
-
-    if isinstance(label_values, str):
-        label_values = [label_values]
-
-    self.data_to_label = pl.DataFrame(schema=plot_df.schema)
-    positive_betas = self.positive_betas.clone()
-    negative_betas = self.negative_betas.clone()
-    if "_marker_size" in positive_betas.columns:
-        positive_betas = positive_betas.drop("_marker_size")
-    if "_marker_size" in negative_betas.columns:
-        negative_betas = negative_betas.drop("_marker_size")
-
-    for item in label_values:
-        if item == "positive_beta":
-            self.data_to_label = pl.concat(
-                [
-                    self.data_to_label,
-                    positive_betas.filter(pl.col("beta") >= label_value_threshold),
-                ]
-            )
-            if label_categories is not None:
-                self.data_to_label = self.data_to_label.filter(
-                    pl.col("phecode_category").is_in(label_categories)
-                )[:label_count]
-            else:
-                self.data_to_label = self.data_to_label[:label_count]
-        elif item == "negative_beta":
-            self.data_to_label = pl.concat(
-                [
-                    self.data_to_label,
-                    negative_betas.filter(pl.col("beta") <= label_value_threshold),
-                ]
-            )
-            if label_categories is not None:
-                self.data_to_label = self.data_to_label.filter(
-                    pl.col("phecode_category").is_in(label_categories)
-                )[:label_count]
-            else:
-                self.data_to_label = self.data_to_label[:label_count]
-        elif item == "p_value":
-            self.data_to_label = pl.concat(
-                [
-                    self.data_to_label,
-                    plot_df.sort(by="p_value").filter(
-                        pl.col("neg_log_p_value") >= label_value_threshold
-                    ),
-                ]
-            )
-            if label_categories is not None:
-                self.data_to_label = self.data_to_label.filter(
-                    pl.col("phecode_category").is_in(label_categories)
-                )[:label_count]
-            else:
-                self.data_to_label = self.data_to_label[:label_count]
-        else:
-            self.data_to_label = pl.concat(
-                [self.data_to_label, plot_df.filter(pl.col("phecode") == item)]
-            )
-
-    texts = []
-    for i in range(len(self.data_to_label)):
-        if mc.is_color_like(label_color):
-            color = pl.Series(values=[label_color] * len(self.data_to_label))
-        else:
-            # noinspection PyTypeChecker
-            color = self.data_to_label[label_color]
-        # noinspection PyTypeChecker
-        texts.append(
-            adjustText.plt.text(
-                float(self.data_to_label[x_col][i]),
-                float(self.data_to_label[y_col][i]),
-                self._split_text(
-                    self.data_to_label[label_text_column][i], label_split_threshold
-                ),
-                color=color[i],
-                size=label_size,
-                weight=label_weight,
-                alpha=1,
-                bbox=dict(
-                    facecolor="white",
-                    edgecolor="none",
-                    boxstyle="round",
-                    alpha=0.5,
-                    lw=0.5,
-                ),
-            )
-        )
-
-    if len(texts) > 0:
-        return adjustText.adjust_text(
-            texts,
-            arrowprops=dict(
-                arrowstyle="simple", color="gray", lw=0.5, mutation_scale=2
-            ),
-        )
-
-
-def _manhattan_legend(self, ax, legend_marker_size):
-    """
-    :param ax: plot object
-    :param legend_marker_size: size of markers
-    :return: legend element
-    """
-    legend_elements = [
-        Line2D([0], [0], color="blue", lw=1, linestyle="dashdot", label="Infinity"),
-        Line2D([0], [0], color="green", lw=1, label="Bonferroni\nCorrection"),
-        Line2D([0], [0], color="red", lw=1, label="Nominal\nSignificance"),
-        Line2D(
-            [0],
-            [0],
-            marker="^",
-            label="Increased\nRisk Effect",
-            color="white",
-            markerfacecolor="blue",
-            alpha=self.positive_alpha,
-            markersize=legend_marker_size,
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker="v",
-            label="Decreased\nRisk Effect",
-            color="white",
-            markerfacecolor="blue",
-            alpha=self.negative_alpha,
-            markersize=legend_marker_size,
-        ),
+    cols_to_search_for = [
+        "phecode_category",
+        "phecode_description",
+        "converged",
+        pval_col,
+        beta_col,
     ]
-    ax.legend(
-        handles=legend_elements,
-        handlelength=2,
-        loc="center left",
-        bbox_to_anchor=(1, 0.5),
-        fontsize=legend_marker_size,
-    )
 
+    cols_present = [col not in df.columns for col in cols_to_search_for]
 
-def manhattan(
-    self,
-    label_values="p_value",
-    label_value_threshold=0,
-    label_count=10,
-    label_size=8,
-    label_text_column="phecode_string",
-    label_color="label_color",
-    label_weight="normal",
-    label_split_threshold=30,
-    marker_size_by_beta=False,
-    marker_scale_factor=1,
-    phecode_categories=None,
-    plot_all_categories=True,
-    title=None,
-    title_text_size=10,
-    y_limit=None,
-    axis_text_size=8,
-    show_legend=True,
-    legend_marker_size=6,
-    dpi=150,
-    save_plot=True,
-    output_file_name=None,
-    output_file_type="pdf",
-):
-
-    ############
-    # SETTINGS #
-    ############
-
-    # setup some variables based on plot_all_categories and phecode_categories
-
-    # offset
-    self.offset = 9
-
-    # phecode_categories & label_categories
-    if phecode_categories:
-        if isinstance(phecode_categories, str):  # convert to list if input is str
-            phecode_categories = [phecode_categories]
-        phecode_categories.sort()
-        label_categories = phecode_categories
-        self.phecode_categories = phecode_categories
-    else:
-        label_categories = None
-
-    # plot_df and label_value_cols
-    if plot_all_categories:
-        selected_color_dict = self.color_dict
-        n_categories = len(self.phewas_result.columns)
-        # create plot_df containing only necessary data for plotting
-        plot_df = self._create_phecode_index(self.phewas_result)
-    else:
-        if phecode_categories:
-            selected_color_dict = {k: self.color_dict[k] for k in phecode_categories}
-            n_categories = len(phecode_categories)
-            dpi = None
-            # create plot_df containing only necessary data for plotting
-            plot_df = self._create_phecode_index(
-                self._filter_by_phecode_categories(
-                    self.phewas_result, phecode_categories=phecode_categories
-                )
-            )
-        else:
-            print(
-                "phecode_categories must not be None when plot_all_categories = False."
-            )
-            return
-
-    # create plot
-    self.ratio = n_categories / len(self.phewas_result.columns)
-    fig, ax = adjustText.plt.subplots(figsize=(12 * self.ratio, 7), dpi=dpi)
-
-    # plot title
-    if title is not None:
-        adjustText.plt.title(title, weight="bold", size=title_text_size)
-
-    # set limit for display on y axes
-    if y_limit is not None:
-        ax.set_ylim(-0.2, y_limit)
-
-    # y axis label
-    ax.set_ylabel(r"$-\log_{10}$(p-value)", size=axis_text_size)
-
-    # generate positive & negative betas
-    self.positive_betas, self.negative_betas = self._split_by_beta(
-        plot_df, marker_size_by_beta
-    )
-
-    ############
-    # PLOTTING #
-    ############
-
-    # x-axis offset
-    adjustText.plt.xlim(
-        float(plot_df["phecode_index"].min()) - self.offset - 1,
-        float(plot_df["phecode_index"].max()) + self.offset + 1,
-    )
-
-    # create x ticks labels and colors
-    self._x_ticks(plot_df, selected_color_dict)
-
-    # scatter
-    self._manhattan_scatter(
-        ax=ax, marker_size_by_beta=marker_size_by_beta, scale_factor=marker_scale_factor
-    )
-
-    # lines
-    self._lines(
-        ax=ax,
-        plot_type="manhattan",
-        plot_df=plot_df,
-        x_col="phecode_index",
-        nominal_significance_line=True,
-        bonferroni_line=True,
-        infinity_line=True,
-    )
-
-    # labeling
-    self._manhattan_label(
-        plot_df=plot_df,
-        label_values=label_values,
-        label_count=label_count,
-        label_text_column=label_text_column,
-        label_categories=label_categories,
-        label_value_threshold=label_value_threshold,
-        label_split_threshold=label_split_threshold,
-        label_size=label_size,
-        label_color=label_color,
-        label_weight=label_weight,
-    )
-
-    # legend
-    if show_legend:
-        self._manhattan_legend(ax, legend_marker_size)
-
-    # save plot
-    if save_plot:
-        self.save_plot(
-            plot_type="manhattan",
-            output_file_name=output_file_name,
-            output_file_type=output_file_type,
+    if any(cols_present):
+        err_msg = (
+            "Did not find all the expected columns within the provided dataframe. Please make sure the following columns are in the dataframe: "
+            + ", ".join(cols_present)
         )
+        raise ValueError(err_msg)
 
 
-def generate_plot() -> None:
-    # bonferroni
-    # parser = generate_parser()
+def main(args: argparse.Namespace) -> None:
 
-    # args = parser.parse_args()
+    # read in the dataframe
+    df = pl.read_csv(args.input_file, separator="\t")
 
-    phewas_result = pl.read_csv(
-        args.input,
-        separator="\t",
-        columns=[
-            "phecode",
-            "phecode_description",
-            "phecode_category",
-            "coverged",
-            "status_pvalue",
-            "status_beta",
-        ],
-    )
+    significance_threshold = 0.05 / df.shape[0]
+    formatted_df_results = format_df(df, args.pval_col, args.beta_col)
 
-    # filter to converged results
-    # if args.converged_only:
-    phewas_result = phewas_result.filter(pl.col("converged") == "true")
-    # lets also generate a -log10 pvalue column
-    phewas_results = phewas_result.with_columns(
-        -np.log10(pl.col("status_pvalue")).alias("negative_log10_pvalue")
-    )
-
-    phewas_results = _create_phecode_index(phewas_result)
-
-    sns.relplot(
-        data=phewas_results,
-        x="phecode_index",
-        y="negative_log10_pvalue",
-        aspect=4,
-        hue="phecode_category",
-        palette="Set1",
-    )
-
-    # if args.bonferroni is None:
-    #     bonferroni = -np.log10(0.05 / len(phewas_result))
-    # else:
-    #     bonferroni = args.bonferroni
-
-    # nominal_significance = -np.log10(0.05)
-
-    # cmap = colormaps["tab20"]
-
-    # phecode_categories = sorted(phewas_result["phecode_category"].unique().to_list())
-
-    # color_dict = {category: cmap(indx) for indx, category in enumerate(phecode_categories)}
-
-
-if __name__ == "__main__":
-    generate_plot()
+    generate_manhatten(formatted_df_results, args.output, significance_threshold)
