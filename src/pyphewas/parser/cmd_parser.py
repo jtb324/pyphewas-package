@@ -10,7 +10,7 @@ def generate_parser() -> argparse.ArgumentParser:
         formatter_class=RichHelpFormatter,
         epilog="""
     Minimal Examples:
-        python %(prog)s  --counts counts.csv --covariate-file covariates.csv --min-phecode-count 2 --covariate-list COVAR_1 COVAR_2 COVAR_3 --status-col status_colname --sample-col sample_colname --min-case-count 100
+        %(prog)s  --counts counts.csv --covariate-file covariates.csv --min-phecode-count 2 --covariate-list COVAR_1 COVAR_2 COVAR_3 --status-col status_colname --sample-col sample_colname --min-case-count 100
     """,
     )
 

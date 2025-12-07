@@ -1,4 +1,5 @@
 from typing_extensions import Format
+from rich_argparse import RichHelpFormatter
 import numpy as np
 import argparse
 from pathlib import Path
@@ -212,7 +213,53 @@ def check_df_columns(df: pl.DataFrame, pval_col: str, beta_col: str) -> None:
         raise ValueError(err_msg)
 
 
-def main(args: argparse.Namespace) -> None:
+def main() -> None:
+
+    parser = argparse.ArgumentParser(
+        description="CLI too to generate the manhattan plot after running the PheWAS",
+        formatter_class=RichHelpFormatter,
+        epilog="""
+    Minimal Examples:
+        %(prog)s  --input-file phewas_results.txt 
+    """,
+    )
+
+    parser.add_argument(
+        "--input-file",
+        "-i",
+        help="input file with the reusults from the PheWAS. This file should be tab separated and have the columns 'phecode_category', 'phecode_description', 'coverged'.",
+    )
+
+    parser.add_argument(
+        "--output-file",
+        "-o",
+        type=Path,
+        help="filepath to output the manhattan plot to. (default: %(default)s)",
+        default=Path("test.png"),
+    )
+
+    parser.add_argument(
+        "--pval-col",
+        type=str,
+        help="name of the column that has the pvalues for the variable of interest. (default: %(default)s)",
+        default="pval",
+    )
+
+    parser.add_argument(
+        "--beta-col",
+        type=str,
+        help="name of the column that has betas for the variables of interest. (default: %(default)s)",
+        default="beta",
+    )
+
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=300,
+        help="quality of the image to output. (default: %(default)s)",
+    )
+
+    args = parser.parse_args()
 
     # read in the dataframe
     df = pl.read_csv(args.input_file, separator="\t")
@@ -220,4 +267,10 @@ def main(args: argparse.Namespace) -> None:
     significance_threshold = 0.05 / df.shape[0]
     formatted_df_results = format_df(df, args.pval_col, args.beta_col)
 
-    generate_manhatten(formatted_df_results, args.output, significance_threshold)
+    generate_manhatten(
+        formatted_df_results, args.output_file, significance_threshold, dpi=args.dpi
+    )
+
+
+if __name__ == "__main__":
+    main()
