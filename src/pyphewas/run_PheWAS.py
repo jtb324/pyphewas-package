@@ -14,14 +14,15 @@ import polars as pl
 from tqdm import tqdm
 from typing import Any
 import statsmodels.formula.api as smf
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper, GLMResultsWrapper
+from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
+from statsmodels.genmod.families.family import Gaussian
 from statsmodels.tools.sm_exceptions import (
     PerfectSeparationError,
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
 from numpy.linalg import LinAlgError
-from statsmodels.families import Gaussian
 import multiprocessing as mp
 import warnings
 
