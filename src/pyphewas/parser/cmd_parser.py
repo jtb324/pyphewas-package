@@ -95,6 +95,15 @@ def generate_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--model",
+        type=str,
+        default="logistic",
+        required=False,
+        choices=["linear", "logistic"],
+        help="Whether to run a linear model or a logistic model for the regression. (default: %(default)s)",
+    )
+
+    parser.add_argument(
         "--flip-predictor-and-outcome",
         default=False,
         help="Optional flag to control the behavior of what is the predictor and what is the outcome. By default, our model assumes the outcome is the phecode status and the predictor is or provided case/control status. If this flag is provided then the outcome becomes our case/control status and the predictor will be the phecode status %(default)s",

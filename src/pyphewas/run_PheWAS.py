@@ -14,13 +14,14 @@ import polars as pl
 from tqdm import tqdm
 from typing import Any
 import statsmodels.formula.api as smf
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from statsmodels.discrete.discrete_model import BinaryResultsWrapper, GLMResultsWrapper
 from statsmodels.tools.sm_exceptions import (
     PerfectSeparationError,
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
 from numpy.linalg import LinAlgError
+from statsmodels.families import Gaussian
 import multiprocessing as mp
 import warnings
 
@@ -65,21 +66,16 @@ def read_in_cases_and_exclusions(
     return return_dict
 
 
-def _format_results(results: BinaryResultsWrapper) -> dict[str, Any]:
+def _format_results(
+    results: BinaryResultsWrapper | GLMResultsWrapper,
+) -> dict[str, Any]:
     result_dictionary = {}
     # We need to first get the convered status
     # print(int(observation_count) - case_count)
-    converged_key, converged_status = (
-        results.summary()
-        .tables[0]
-        .as_csv()
-        .split("\n")[6]
-        .replace(" ", "")
-        .split(",")[:2]
-    )
-    result_dictionary["converged"] = converged_status
+    result_dictionary["converged"] = str(results.converged)
 
     # generate a table with the beta, stderr, and pvalue for each variable in the model #TODO: refactor
+    print("")
     for key, pvalue in results.pvalues.items():
 
         # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
@@ -146,6 +142,7 @@ def run_logit_regression(
     sample_colname: str,
     min_case_count: int,
     max_iteration_threshold: int,
+    regression_model: str = "logistic",
 ) -> None:
 
     phecode_name, phecode_obj = phecode_info[0]
@@ -191,9 +188,16 @@ def run_logit_regression(
 
     # run the regression
     try:
-        result = smf.logit(analysis_str, data=covariates_df).fit(
-            disp=0, maxiter=max_iteration_threshold
-        )
+        if regression_model == "logistic":
+            result = smf.logit(analysis_str, data=covariates_df).fit(
+                disp=0, maxiter=max_iteration_threshold
+            )
+        else:
+            # run the linear model
+            result = smf.glm(
+                formula=analysis_str, data=covariates_df, family=Gaussian()
+            ).fit(disp=0, maxiter=max_iteration_threshold)
+
     except (
         LinAlgError,
         PerfectSeparationError,
@@ -291,7 +295,7 @@ def read_in_phecode_descriptions(descriptions_filepath: Path) -> dict[str, str]:
     description_dict = {}
     with xopen(descriptions_filepath, "r") as desc_filehandle:
         reader = csv.reader(desc_filehandle, delimiter=",", quotechar='"')
-        header = next(reader)
+        _ = next(reader)
         for row in reader:
             phecode, _, _, phecode_str, _, category, *_ = row
 
@@ -360,7 +364,7 @@ def main() -> None:
                 phecode_descriptions = (
                     main_filepath.parent / configs[args.phecode_version]
                 )
-            except KeyError as err:
+            except KeyError:
                 print(
                     f"The provided phecode version, {args.phecode_version} is not allowed. Please provide a value of either 'phecodeX', 'phecode1.2', or 'phecodeX_who' spelled exactly as shown here"
                 )
@@ -438,7 +442,7 @@ def main() -> None:
             max_iteration_threshold=args.max_iterations,
         )
         try:
-            for r in pool.imap(
+            for _ in pool.imap(
                 partial_func, [(item,) for item in phecode_cases.items()]
             ):
                 pbar.update()
