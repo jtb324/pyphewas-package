@@ -5,7 +5,6 @@ import argparse
 from pathlib import Path
 import polars as pl
 import matplotlib.pyplot as plt
-import adjustText
 import seaborn as sns
 from dataclasses import dataclass
 
@@ -79,10 +78,12 @@ def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> Formatt
 
     print(f"replacing infinite values in the dataframe with {max_finite_val}")
 
-    df = df.with_columns(
-        pl.when(~pl.col("neg_log10_p").is_finite())
-        .then(max_finite_val)
-        .otherwise(pl.col("neg_log10_p"))
+    df = (
+        df.with_columns(
+            pl.when(~pl.col("neg_log10_p").is_finite())
+            .then(max_finite_val)
+            .otherwise(pl.col("neg_log10_p"))
+        )
         .with_columns(
             pl.when(pl.col(beta_colname) > 0)
             .then(pl.lit("Positive"))
@@ -109,7 +110,7 @@ def generate_manhatten(
     plt.figure(figsize=(16, 9))
 
     if color_palette is None:
-        color_palette = determine_color_palatte(len(df["category"].unique()))
+        color_palette = determine_color_palatte(len(df["phecode_category"].unique()))
 
     # We need to format the dataframe
     markers = {"Positive": "^", "Negative": "v"}
@@ -120,7 +121,7 @@ def generate_manhatten(
         data=plot_data,
         x="index",
         y="neg_log10_p",
-        hue="category",
+        hue="phecode_category",
         palette=color_palette,
         style="direction",
         markers=markers,
@@ -155,7 +156,7 @@ def generate_manhatten(
     )
     plt.xticks(
         label_df["pos"].to_list(),
-        label_df["category"].to_list(),
+        label_df["phecode_category"].to_list(),
         rotation=45,
         ha="right",
         fontsize=10,
@@ -171,7 +172,7 @@ def generate_manhatten(
         title="Category / Direction",
     )
     plt.tight_layout()
-    plt.savefig(output_filename, dpi=dpi, bbox_inches="tight", transparent=True)
+    plt.savefig(output_filename, dpi=dpi, bbox_inches="tight")
 
 
 def check_df_columns(df: pl.DataFrame, pval_col: str, beta_col: str) -> None:
