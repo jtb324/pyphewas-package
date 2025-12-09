@@ -41,9 +41,10 @@ package-dir = "src"
 
 [dependency-groups]
 dev = [
-  "commitizen>=4.8.3",
-  "black>=25.1.0",
-  "ipykernel>=6.29.5",
-  "pyarrow>=20.0.0",
-  "scalene>=1.5.51",
+    "commitizen>=4.8.3",
+    "black>=25.1.0",
+    "ipykernel>=6.29.5",
+    "pyarrow>=20.0.0",
+    "scalene>=1.5.51",
+    "pytest>=9.0.2",
 ]

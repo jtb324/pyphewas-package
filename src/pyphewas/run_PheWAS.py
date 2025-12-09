@@ -157,6 +157,7 @@ def run_regression(
                 disp=0, maxiter=max_iteration_count
             )
 
+        result = _format_results(result)
         error = None
 
         # In the case of any exception we are going to just return the error and result will be None
