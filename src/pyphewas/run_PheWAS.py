@@ -319,7 +319,7 @@ def _write_to_file(
     status_name: str,
     phecode_descriptions: dict[str, str],
     covar_list: list[str],
-    results: DictProxy[Any, Any],
+    results: DictProxy,
     predictor_output_flipped: bool = False,
 ) -> None:
 
