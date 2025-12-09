@@ -32,4 +32,4 @@ jobs:
           pip install pytest
 
       - name: run integration test with pytest
-        run: pytest tests/integration_test.py
+        run: pytest tests/integration_tests.py
