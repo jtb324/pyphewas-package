@@ -15,12 +15,12 @@ from tqdm import tqdm
 from typing import Any
 import statsmodels.formula.api as smf
 from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
+from statsmodels.genmod.families.family import Gaussian
 from statsmodels.tools.sm_exceptions import (
-    PerfectSeparationError,
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
-from numpy.linalg import LinAlgError
 import multiprocessing as mp
 import warnings
 
@@ -65,21 +65,16 @@ def read_in_cases_and_exclusions(
     return return_dict
 
 
-def _format_results(results: BinaryResultsWrapper) -> dict[str, Any]:
+def _format_results(
+    results: BinaryResultsWrapper | GLMResultsWrapper,
+) -> dict[str, Any]:
     result_dictionary = {}
     # We need to first get the convered status
     # print(int(observation_count) - case_count)
-    converged_key, converged_status = (
-        results.summary()
-        .tables[0]
-        .as_csv()
-        .split("\n")[6]
-        .replace(" ", "")
-        .split(",")[:2]
-    )
-    result_dictionary["converged"] = converged_status
+    result_dictionary["converged"] = str(results.converged)
 
     # generate a table with the beta, stderr, and pvalue for each variable in the model #TODO: refactor
+    print("")
     for key, pvalue in results.pvalues.items():
 
         # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
@@ -138,6 +133,54 @@ def generate_model_str(
     return analysis_str
 
 
+@dataclass
+class RegressionResults:
+    model_type: str
+    result: dict[str, Any]
+    err: Exception | None
+
+
+def run_regression(
+    model_eq: str,
+    covariates: pl.DataFrame,
+    regression_model: str,
+    max_iteration_count: int,
+) -> RegressionResults:
+    try:
+        if regression_model == "logistic":
+            result = smf.logit(model_eq, data=covariates).fit(
+                disp=0, maxiter=max_iteration_count
+            )
+        else:
+            # run the linear model
+            result = smf.glm(formula=model_eq, data=covariates, family=Gaussian()).fit(
+                disp=0, maxiter=max_iteration_count
+            )
+
+        result = _format_results(result)
+        error = None
+
+        # In the case of any exception we are going to just return the error and result will be None
+    except Exception as e:
+        result = {}
+        error = e
+
+    return RegressionResults(model_type=regression_model, result=result, err=error)
+
+
+def check_err(error_obj: Exception) -> int:
+    """look at the exception and decide whether the program can continue or if it needs to fail"""
+    # If a perfect separation error occurs then we
+    if (
+        "Singular matrix" in str(error_obj)
+        or "Perfect separation" in str(error_obj)
+        or "overflow encountered in exp" in str(error_obj)
+    ):
+        return 0
+    else:
+        raise error_obj
+
+
 def run_logit_regression(
     phecode_info: tuple,
     return_dictionary: DictProxy,
@@ -146,7 +189,42 @@ def run_logit_regression(
     sample_colname: str,
     min_case_count: int,
     max_iteration_threshold: int,
+    regression_model: str = "logistic",
 ) -> None:
+    """method to run regress for the phenotype of interest
+    Parameters
+    ----------
+    phecode_info : tuple
+        tuple that has information for the regression such as what the phecode name is and who are the cases/controls/and exclusions
+
+    return_dictionary : DictProxy
+        Dictionary that is being shared between the different
+        python processes.
+
+    covariates : pl.DataFrame
+        polars dataframe containing all of the covariates to use
+        in the regression analysis
+
+    analysis_str : str
+        string for the model that takes the form 'Y=mx+B'
+
+    sample_colname : str,
+        column that has the sample ids for the analysis
+
+    min_case_count : int
+        minimum number of cases that a phecode has to have to be
+        included in the analysis
+
+    max_iteration_threshold : int
+        maximum number of iterations for the model to converge.
+        This value can be increased if a large number of the
+        regressions don't converge
+
+    regression_mode : str
+        string indicating whether we are trying to run a
+        linear regression model or a logistic regression model
+
+    """
 
     phecode_name, phecode_obj = phecode_info[0]
 
@@ -190,40 +268,24 @@ def run_logit_regression(
     exclusion_count = covariates.shape[0] - covariates_df.shape[0]
 
     # run the regression
-    try:
-        result = smf.logit(analysis_str, data=covariates_df).fit(
-            disp=0, maxiter=max_iteration_threshold
-        )
-    except (
-        LinAlgError,
-        PerfectSeparationError,
-        RuntimeWarning,
-        PerfectSeparationWarning,
-    ) as err:
-        # If a perfect separation error occurs then we
-        if (
-            "Singular matrix" in str(err)
-            or "Perfect separation" in str(err)
-            or "overflow encountered in exp" in str(err)
-        ):
-            print(
-                f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
-            )
-            return
-        else:
-            raise err
-    # except ConvergenceWarning as con_err:
-    #     print(
-    #         f"The model for the PheCode, {phecode_name}, failed to converge. This model had {case_count} cases and {control_count} controls."
-    #     )
+    results = run_regression(
+        analysis_str, covariates_df, regression_model, max_iteration_threshold
+    )
 
-    formatted_results = _format_results(result)
+    if results.err is not None:
+        # Check if the error is a perfect separation error or if
+        # it needs to crash the program
+        _ = check_err(results.err)
+        print(
+            f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
+        )
+        return
 
     # Lets add the counts to the results dictionary
-    formatted_results["case_count"] = case_count
-    formatted_results["control_count"] = control_count
-    formatted_results["exclusion_count"] = exclusion_count
-    return_dictionary[phecode_name] = formatted_results
+    results.result["case_count"] = case_count
+    results.result["control_count"] = control_count
+    results.result["exclusion_count"] = exclusion_count
+    return_dictionary[phecode_name] = results.result
 
 
 def _generate_header(
@@ -257,7 +319,7 @@ def _write_to_file(
     status_name: str,
     phecode_descriptions: dict[str, str],
     covar_list: list[str],
-    results: DictProxy[Any, Any],
+    results: DictProxy,
     predictor_output_flipped: bool = False,
 ) -> None:
 
@@ -291,7 +353,7 @@ def read_in_phecode_descriptions(descriptions_filepath: Path) -> dict[str, str]:
     description_dict = {}
     with xopen(descriptions_filepath, "r") as desc_filehandle:
         reader = csv.reader(desc_filehandle, delimiter=",", quotechar='"')
-        header = next(reader)
+        _ = next(reader)
         for row in reader:
             phecode, _, _, phecode_str, _, category, *_ = row
 
@@ -360,7 +422,7 @@ def main() -> None:
                 phecode_descriptions = (
                     main_filepath.parent / configs[args.phecode_version]
                 )
-            except KeyError as err:
+            except KeyError:
                 print(
                     f"The provided phecode version, {args.phecode_version} is not allowed. Please provide a value of either 'phecodeX', 'phecode1.2', or 'phecodeX_who' spelled exactly as shown here"
                 )
@@ -438,7 +500,7 @@ def main() -> None:
             max_iteration_threshold=args.max_iterations,
         )
         try:
-            for r in pool.imap(
+            for _ in pool.imap(
                 partial_func, [(item,) for item in phecode_cases.items()]
             ):
                 pbar.update()
