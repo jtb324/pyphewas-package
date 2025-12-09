@@ -243,8 +243,14 @@ def main():
             f"Creating the output directory, {args.output_dir}, to write simulated data into"
         )
 
-    covariate_output_path = args.output_dir / "covariate_df.txt"
-    phecode_output_path = args.output_dir / "phecode_output.txt"
+    covariate_output_path = (
+        args.output_dir
+        / f"covariates_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
+    )
+    phecode_output_path = (
+        args.output_dir
+        / f"phecodes_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
+    )
 
     cov_df = generate_covariates(
         args.sample_count, args.predictor_type, args.seed, args.mean_age
