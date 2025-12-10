@@ -24,15 +24,10 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 master_doc = "index"
 
-html_theme = "alabaster"
+html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
 html_theme_options = {
-    "page_width": "1200px",
-    "sidebar_width": "280px",
-    "github_user": "jtb324",
-    "github_repo": "pyphewas-package",
-    "github_type": "star",
-    "github_button": True,
-    "github_count": False,
+    "repository_url": "https://github.com/jtb324/pyphewas-package/",
+    "use_repository_button": True,
 }
 html_title = "PyPheWAS-Package"
