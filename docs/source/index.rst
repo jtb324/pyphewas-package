@@ -11,7 +11,7 @@ PyPheWAS documentation
 
 Installation:
 -------------
-This code is hosted on PYPI and can be installed using Pip. It is recommended to install the package into a virtualenv. The commands to do this are shown below
+This code is hosted on PYPI and can be installed using Pip. It is recommended to install the package into a virtualenv. The PyPheWAS-package only supports python3.10+ so make sure that you have this installed on your computer. The commands to do this are shown below
 
 .. code:: python
 
