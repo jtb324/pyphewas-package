@@ -23,45 +23,66 @@ This code is hosted on PYPI and can be installed using Pip. It is recommended to
   pip install pyphewas-package
 
 
+Using the PyPheWAS package:
+---------------------------
+The PyPheWAS package has 2 main functions explained below:
+
+* **pyphewas** - This command calls the script that performs the PheWAS for the dataset. This code will generate p-values, betas, and standard errors for every term in the model (Ex. If you had three predictors age, sex, and record length, then you would have three columns in the output for each predictor representing p-values, betas, and standard errors.)
+
+* **make_manhattan** - This command calls the script responsible for generating a manhattan plot from the PheWAS results. It is designed for the results from the pyphewas command, but has flexibility for other results from other programs as long as that program has p-values and betas.
+
+
 Example Commands:
 -----------------
-**Non sex stratified with parallelization**:
+**Running a PheWAS for binary covariates**
+
+The following command illustrates how to run a phewas for the provided test data. In this example, our data represents a binary phenotype of interest where individuals are either cases or controls. For this example we can assume that all test data is in the "tests/inputs" directory of the repository. This command filters the phecode counts so that cases must have 2 or more occurences of the phecode. Additionally, this example only includes phecodes which have 100 or more cases. . 
 
 .. code:: bash
 
   pyphewas \
-      --counts counts.csv \
-      --covariate-file covariates.csv \
+      --counts phecodes_file_10000_samples_binary_predictor_30_phecodes.txt \
+      --covariate-file covariates_file_10000_samples_binary_predictor_30_phecodes.txt \
       --min-phecode-count 2 \
-      --status-col status \
-      --sample-col person_id \
-      --covariate-list EHR_GENDER age unique_phecode_count \
+      --status-col predictor \
+      --sample-col id \
+      --covariate-list age sex \
       --min-case-count 100 \
-      --cpus 25 \
+      --cpus 2 \
       --output output.txt.gz \
-      --phecode-version phecodeX
+      --phecode-version None \
+      --model logistic 
 
-**Sex Stratified with parallelization**:
+To run a linear regression it is as simple as changing the model flag from "logistic" to "linear" as shown below. This will change the model from statsmodel.formula logit to the statsmodel.formula glm with the Gaussian family
+. 
 
 .. code:: bash
 
+
   pyphewas \
-      --counts counts.csv \
-      --covariate-file covariates.csv \
+      --counts phecodes_file_10000_samples_dosage_predictor_30_phecodes.txt \
+      --covariate-file covariates_file_10000_samples_dosage_predictor_30_phecodes.txt \
       --min-phecode-count 2 \
-      --status-col status \
-      --sample-col person_id \
-      --covariate-list age unique_phecode_count \
+      --status-col predictor \
+      --sample-col id \
+      --covariate-list age sex \
       --min-case-count 100 \
-      --cpus 25 \
+      --cpus 2 \
       --output output.txt.gz \
-      --phecode-version phecodeX \
-      --flip-predictor-and-outcome \
-      --run-sex-specific female-only \
-      --male-as-one True \
-      --sex-col EHR_GENDER
+      --phecode-version None \
+      --model linear
+
+**Generating a manhattan plot from the data**
+The PyPheWAS package also has the ability to generate a manhattan plot from the output of the pyphewas command. This functionality can also be used in a juypter notebook. The different python functions used in the make_manhattan command are exposed through the package. This example only shows how to run the CLI command, but users can read more about running the code in a jupyter notebook in the "insert section here".
+
+.. code:: bash
+
+  make_manhattan \
+    
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :hidden:
+
+   pyphewas
 

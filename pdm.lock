@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:aba26cac47d6fb84ddb7d98479e86f3b60f289929e7d08beb3a753a29a351797"
+content_hash = "sha256:5150abf66d85be961deb88eb6730837a7ed2492e33cc5698575027f46e0b1553"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.11.0||>3.11.0"
@@ -2045,6 +2045,20 @@ dependencies = [
 files = [
     {file = "sphinx_autobuild-2024.10.3-py3-none-any.whl", hash = "sha256:158e16c36f9d633e613c9aaf81c19b0fc458ca78b112533b20dafcda430d60fa"},
     {file = "sphinx_autobuild-2024.10.3.tar.gz", hash = "sha256:248150f8f333e825107b6d4b86113ab28fa51750e5f9ae63b59dc339be951fb1"},
+]
+
+[[package]]
+name = "sphinx-copybutton"
+version = "0.5.2"
+requires_python = ">=3.7"
+summary = "Add a copy button to each of your code cells."
+groups = ["docs"]
+dependencies = [
+    "sphinx>=1.8",
+]
+files = [
+    {file = "sphinx-copybutton-0.5.2.tar.gz", hash = "sha256:4cf17c82fb9646d1bc9ca92ac280813a3b605d8c421225fd9913154103ee1fbd"},
+    {file = "sphinx_copybutton-0.5.2-py3-none-any.whl", hash = "sha256:fb543fd386d917746c9a2c50360c7905b605726b9355cd26e9974857afeae06e"},
 ]
 
 [[package]]
