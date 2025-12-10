@@ -70,4 +70,23 @@ PheWAS Output:
 --------------
 This command outputs a text file that has the results for each phecode run in the analysis. This file will be gzipped compressed if the file has a ".gz" suffix. The columns of this file are described below:
 
+* **phecode**: PheCode id from the PheWAS catalogue (Ex: "499").
+
+* **phecode_description**: Text description of the phecode (Ex: "Cystic Fibrosis for PheCode 499").
+
+* **phecode_category**: The "class" that this particular phecode belongs to. This value is used to group the individual phecodes in the Manhattan plot (Ex: "Endocrine/Metab").
+
+* **case_count**: Number of participants who were classified as cases for the particular phecode.
+
+* **control_count**: Number of individuals who were classified as controls for the particular phecode.
+
+* **converged**: Whether or not the regression model converged for this specific phecode. 
+
+The next three columns are the output statistics for the model. Three columns are made for every term in your model. This means that if you had three independent variables than you would have 9 additional output columns.
+
+* **\*pvalue**: P-value calculated by the regression model.
+
+* **\*beta**: beta estimates from the regression model.
+
+* **\*stderr**: standard error for the betas.
 

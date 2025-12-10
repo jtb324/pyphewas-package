@@ -27,7 +27,20 @@ Using the PyPheWAS package:
 ---------------------------
 The PyPheWAS package has 2 main functions explained below:
 
-* **pyphewas** - This command calls the script that performs the PheWAS for the dataset. This code will generate p-values, betas, and standard errors for every term in the model (Ex. If you had three predictors age, sex, and record length, then you would have three columns in the output for each predictor representing p-values, betas, and standard errors.)
+* **pyphewas** - This command calls the script that performs the PheWAS for the dataset. The program will determine cases/controls/exclusions from the provided phecode counts file and will used these classifications in the regression. This code will generate p-values, betas, and standard errors for every term in the model (Ex. If you had three predictors age, sex, and record length, then you would have three columns in the output for each predictor representing p-values, betas, and standard errors).
+
+.. note::
+
+  **Definition of case/control/exclusion status for each phecode:**
+
+  Case/control/exclusion definition for each phecodes is performed using the following 3 steps:
+  
+  1. If an inidividual has the phecode in their record on 2+ unique dates then they are a case
+
+  2. If the individual has only 1 occurence of the code in their record then they are excluded (This step is skipped if the user has lowered the minimum case threshold from 2 to 1)
+
+  3. All other indivduals are classified as controls
+
 
 * **make_manhattan** - This command calls the script responsible for generating a manhattan plot from the PheWAS results. It is designed for the results from the pyphewas command, but has flexibility for other results from other programs as long as that program has p-values and betas.
 
