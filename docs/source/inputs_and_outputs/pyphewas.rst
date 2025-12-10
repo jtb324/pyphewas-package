@@ -1,5 +1,5 @@
-Inputs and Outputs
-==================
+PyPheWAS Inputs and Outputs
+===========================
 
 This document describes all of the input flags for the pyphewas command as well as the different columns in the output file
 
@@ -31,7 +31,7 @@ PheWAS Inputs:
 
 * **--covariate-list**: Space separated list of covariates to use in the model. All of these covariates must be present in the covariate file and must be spelled exactly the same otherwise the code will crash.
 
-* **--phecode-version**: String telling which version of phecodes to use. This argument helps with mapping the PheCode ID to a description. The allowed values are "phecodeX", "phecode1.2", and "phecodeX_who". Most users will only need to use either the PhecodeX or Phecode1.2 option.
+* **--phecode-version**: String telling which version of phecodes to use. This argument helps with mapping the PheCode ID to a description. The allowed values are "phecodeX", "phecode1.2", "phecodeX_who", or "None". Most users will only need to use either the PhecodeX or Phecode1.2 option.
 
 **Optional Inputs**
 
@@ -68,3 +68,6 @@ PheWAS Inputs:
 
 PheWAS Output:
 --------------
+This command outputs a text file that has the results for each phecode run in the analysis. This file will be gzipped compressed if the file has a ".gz" suffix. The columns of this file are described below:
+
+

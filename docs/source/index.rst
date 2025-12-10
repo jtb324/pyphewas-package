@@ -94,5 +94,5 @@ The PyPheWAS package also has the ability to generate a manhattan plot from the 
    :maxdepth: 2
    :hidden:
 
-   pyphewas
+   inputs_and_outputs/index
 

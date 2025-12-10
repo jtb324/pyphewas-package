@@ -5,10 +5,24 @@
 groups = ["default", "dev", "docs"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:5150abf66d85be961deb88eb6730837a7ed2492e33cc5698575027f46e0b1553"
+content_hash = "sha256:ad1728c7011d61a952b7c2f7406543844b0c1e65ea705a3a58169fe4180a49da"
 
 [[metadata.targets]]
 requires_python = ">=3.10,<3.11.0||>3.11.0"
+
+[[package]]
+name = "accessible-pygments"
+version = "0.0.5"
+requires_python = ">=3.9"
+summary = "A collection of accessible pygments styles"
+groups = ["docs"]
+dependencies = [
+    "pygments>=1.5",
+]
+files = [
+    {file = "accessible_pygments-0.0.5-py3-none-any.whl", hash = "sha256:88ae3211e68a1d0b011504b2ffc1691feafce124b845bd072ab6f9f66f34d4b7"},
+    {file = "accessible_pygments-0.0.5.tar.gz", hash = "sha256:40918d3e6a2b619ad424cb91e556bd3bd8865443d9f22f1dcdf79e33c8046872"},
+]
 
 [[package]]
 name = "adjusttext"
@@ -112,6 +126,21 @@ dependencies = [
 files = [
     {file = "babel-2.17.0-py3-none-any.whl", hash = "sha256:4d0b53093fdfb4b21c92b5213dba5a1b23885afa8383709427046b21c366e5f2"},
     {file = "babel-2.17.0.tar.gz", hash = "sha256:0c54cffb19f690cdcc52a3b50bcbf71e07a808d1c80d549f2459b9d2cf0afb9d"},
+]
+
+[[package]]
+name = "beautifulsoup4"
+version = "4.14.3"
+requires_python = ">=3.7.0"
+summary = "Screen-scraping library"
+groups = ["docs"]
+dependencies = [
+    "soupsieve>=1.6.1",
+    "typing-extensions>=4.0.0",
+]
+files = [
+    {file = "beautifulsoup4-4.14.3-py3-none-any.whl", hash = "sha256:0918bfe44902e6ad8d57732ba310582e98da931428d231a5ecb9e7c703a735bb"},
+    {file = "beautifulsoup4-4.14.3.tar.gz", hash = "sha256:6292b1c5186d356bba669ef9f7f051757099565ad9ada5dd630bd9de5fa7fb86"},
 ]
 
 [[package]]
@@ -1611,6 +1640,27 @@ files = [
 ]
 
 [[package]]
+name = "pydata-sphinx-theme"
+version = "0.15.4"
+requires_python = ">=3.9"
+summary = "Bootstrap-based Sphinx theme from the PyData community"
+groups = ["docs"]
+dependencies = [
+    "Babel",
+    "accessible-pygments",
+    "beautifulsoup4",
+    "docutils!=0.17.0",
+    "packaging",
+    "pygments>=2.7",
+    "sphinx>=5",
+    "typing-extensions",
+]
+files = [
+    {file = "pydata_sphinx_theme-0.15.4-py3-none-any.whl", hash = "sha256:2136ad0e9500d0949f96167e63f3e298620040aea8f9c74621959eda5d4cf8e6"},
+    {file = "pydata_sphinx_theme-0.15.4.tar.gz", hash = "sha256:7762ec0ac59df3acecf49fd2f889e1b4565dbce8b88b2e29ee06fdd90645a06d"},
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 requires_python = ">=3.8"
@@ -1999,6 +2049,17 @@ files = [
 ]
 
 [[package]]
+name = "soupsieve"
+version = "2.8"
+requires_python = ">=3.9"
+summary = "A modern CSS selector implementation for Beautiful Soup."
+groups = ["docs"]
+files = [
+    {file = "soupsieve-2.8-py3-none-any.whl", hash = "sha256:0cc76456a30e20f5d7f2e14a98a4ae2ee4e5abdc7c5ea0aafe795f344bc7984c"},
+    {file = "soupsieve-2.8.tar.gz", hash = "sha256:e2dd4a40a628cb5f28f6d4b0db8800b8f581b65bb380b97de22ba5ca8d72572f"},
+]
+
+[[package]]
 name = "sphinx"
 version = "8.1.3"
 requires_python = ">=3.10"
@@ -2045,6 +2106,21 @@ dependencies = [
 files = [
     {file = "sphinx_autobuild-2024.10.3-py3-none-any.whl", hash = "sha256:158e16c36f9d633e613c9aaf81c19b0fc458ca78b112533b20dafcda430d60fa"},
     {file = "sphinx_autobuild-2024.10.3.tar.gz", hash = "sha256:248150f8f333e825107b6d4b86113ab28fa51750e5f9ae63b59dc339be951fb1"},
+]
+
+[[package]]
+name = "sphinx-book-theme"
+version = "1.1.4"
+requires_python = ">=3.9"
+summary = "A clean book theme for scientific explanations and documentation with Sphinx"
+groups = ["docs"]
+dependencies = [
+    "pydata-sphinx-theme==0.15.4",
+    "sphinx>=6.1",
+]
+files = [
+    {file = "sphinx_book_theme-1.1.4-py3-none-any.whl", hash = "sha256:843b3f5c8684640f4a2d01abd298beb66452d1b2394cd9ef5be5ebd5640ea0e1"},
+    {file = "sphinx_book_theme-1.1.4.tar.gz", hash = "sha256:73efe28af871d0a89bd05856d300e61edce0d5b2fbb7984e84454be0fedfe9ed"},
 ]
 
 [[package]]
