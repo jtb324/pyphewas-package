@@ -349,15 +349,17 @@ def _write_to_file(
         output_filehandle.write(f"{output_str}\n")
 
 
-def read_in_phecode_descriptions(descriptions_filepath: Path) -> dict[str, str]:
+def read_in_phecode_descriptions(descriptions_filepath: Path | None) -> dict[str, str]:
     description_dict = {}
-    with xopen(descriptions_filepath, "r") as desc_filehandle:
-        reader = csv.reader(desc_filehandle, delimiter=",", quotechar='"')
-        _ = next(reader)
-        for row in reader:
-            phecode, _, _, phecode_str, _, category, *_ = row
 
-            description_dict[phecode] = (phecode_str, category)
+    if descriptions_filepath:
+        with xopen(descriptions_filepath, "r") as desc_filehandle:
+            reader = csv.reader(desc_filehandle, delimiter=",", quotechar='"')
+            _ = next(reader)
+            for row in reader:
+                phecode, _, _, phecode_str, _, category, *_ = row
+
+                description_dict[phecode] = (phecode_str, category)
     return description_dict
 
 
@@ -399,7 +401,7 @@ def main() -> None:
         )
 
     # we also need to make sure that the sex columns is not
-    # in the list of covariates.
+    # in the list of covariates when we are running sex specific.
     if (  # Because args.covariate_list can be none we need to use short circuiting logic. If
         args.covariate_list  # args.covariate_list == None and we try to use the in operator then the code will raise an error
         and args.sex_col
@@ -414,7 +416,11 @@ def main() -> None:
     start_time = datetime.now()
     # we need to determine the correct path for the phecode descriptions.
     # We can store this values in config file
-    if not args.phecode_descriptions:
+    if not args.phecode_descriptions and args.phecode_version in [
+        "phecodeX",
+        "phecode1.2",
+        "phecodeX_who",
+    ]:
         main_filepath = Path(__file__)
         with open(main_filepath.parent / "config.json", "r") as json_file:
             configs = json.load(json_file)
@@ -427,6 +433,11 @@ def main() -> None:
                     f"The provided phecode version, {args.phecode_version} is not allowed. Please provide a value of either 'phecodeX', 'phecode1.2', or 'phecodeX_who' spelled exactly as shown here"
                 )
                 sys.exit(1)
+    # If the phecode version is none then we need to set the
+    # phecode_description variable also to none indicating we
+    # will not have any phecode descriptions
+    elif not args.phecode_descriptions and args.phecode_version == "None":
+        phecode_descriptions = None
     else:
         phecode_descriptions = args.phecode_descriptions
 

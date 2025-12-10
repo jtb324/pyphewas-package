@@ -89,8 +89,8 @@ def generate_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--phecode-version",
         type=str,
-        required=True,
-        choices=["phecodeX", "phecode1.2", "phecodeX_who"],
+        default="None",
+        choices=["phecodeX", "phecode1.2", "phecodeX_who", "None"],
         help="What version of phecodes to use for the analysis. The options have to be spelled the same as they are here. Allowed choices: '%(choices)s'",
     )
 
