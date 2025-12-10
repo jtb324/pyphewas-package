@@ -49,7 +49,7 @@ Example Commands:
 -----------------
 **Running a PheWAS for binary covariates**
 
-The following command illustrates how to run a phewas for the provided test data. In this example, our data represents a binary phenotype of interest where individuals are either cases or controls. For this example we can assume that all test data is in the "tests/inputs" directory of the repository. This command filters the phecode counts so that cases must have 2 or more occurences of the phecode. Additionally, this example only includes phecodes which have 100 or more cases. . 
+The following command illustrates how to run a phewas for the provided test data. In this example, our data represents a binary phenotype of interest where individuals are either cases or controls. For this example we can assume that all test data is in the "tests/inputs" directory of the repository (You can go to the repository using the github icon at the top right section of the page near the contents menu). This command filters the phecode counts so that cases must have 2 or more occurences of the phecode. Additionally, this example only includes phecodes which have 100 or more cases. . 
 
 .. code:: bash
 
