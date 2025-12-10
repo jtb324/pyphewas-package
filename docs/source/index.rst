@@ -73,11 +73,21 @@ To run a linear regression it is as simple as changing the model flag from "logi
       --model linear
 
 **Generating a manhattan plot from the data**
-The PyPheWAS package also has the ability to generate a manhattan plot from the output of the pyphewas command. This functionality can also be used in a juypter notebook. The different python functions used in the make_manhattan command are exposed through the package. This example only shows how to run the CLI command, but users can read more about running the code in a jupyter notebook in the "insert section here".
+The PyPheWAS package also has the ability to generate a manhattan plot from the output of the pyphewas command. The command below uses the output from the example pyphewas commands above to generate a (*bad in this case*) manhattan plot. The user is expected to provided the name of the columns with the p-values and betas for the variable of interest.
 
 .. code:: bash
 
   make_manhattan \
+    --input-file output.txt.gz \
+    --output-file output_test_manhattan \
+    --pval-col predictor_pvalue \
+    --beta-col predictor_beta 
+
+
+.. note::
+
+  This functionality can also be used in a juypter notebook. The different python functions used in the make_manhattan command are exposed through the package. This example only shows how to run the CLI command, but users can read more about running the code in a jupyter notebook in the "insert section here".
+
     
 
 .. toctree::
