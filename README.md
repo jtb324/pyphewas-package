@@ -1,11 +1,13 @@
 # PyPheWAS package
-A python script I use to run PheWAS analyses
 
-## Summary:
-This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors. 
+A python script I use to run PheWAS analyses. Full Documentation can be found here: [online docs](https://pyphewas-package.readthedocs.io/en/latest/)
 
+## Summary
 
-## Installation:
+This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors.
+
+## Installation
+
 This code is hosted on PYPI and can be install using a package manager such as conda or pip. If using Pip it is recommend to first make a virtualenv using venv and then installing the program into the virtual environment. Use the following commands to install the program.
 
 ```bash Pip installation
@@ -15,6 +17,7 @@ source pyphewas-venv/bin/activate
 
 pip install pyphewas-package
 ```
+
 ```bash Conda installation
 conda create -n pyphewas_env python=3.13 -y
 
@@ -31,7 +34,8 @@ pdm install
 
 If you want to install the program from source code without PDM then you must first install the necessary dependencies from the pyproject.toml file using pip. Then you can call the source file which is located at './src/pyphewas/run_PheWAS.py'
 
-## Required Inputs:
+## Required Inputs
+
 * **--counts**: filepath to a comma separated file where each row has a ID, a phecode id, and the number of times that individual has that phecode in their medical record.
 
 * **--covariate-file**: filepath to a comma separated file that list the covariates and predictor for each individual. The individuals listed in the covariate file will be the individuals in the cohort. *Note* If the 'flip-predictor-and-outcome' flag is used then the predictor variable is assumed to be the outcome in the model.
@@ -40,8 +44,9 @@ If you want to install the program from source code without PDM then you must fi
 
 * **--phecode-version**: String telling which version of phecodes to use. This argument helps with mapping the PheCode ID to a description. The allowed values are "phecodeX", "phecode1.2", and "phecodeX_who". Most users will only need to use either the PhecodeX or Phecode1.2 option.
 
-## Optional Inputs:
-Although these arguments are not required for runtime, some combination of them will general be used to make the analysis either more rigorous, more robust, or more fine tuned for the exact question being asked. 
+## Optional Inputs
+
+Although these arguments are not required for runtime, some combination of them will general be used to make the analysis either more rigorous, more robust, or more fine tuned for the exact question being asked.
 
 * **--min-phecode-count**: Minimum number of phecodes an individual is required to have in order to be considered a case for a phecode. Default value is 2. Under default settings, all individuals with 1 occurence of the phecode are excluded from the regression. If this value is set to 1 then there are no excluded individuals.
 
@@ -65,12 +70,14 @@ Although these arguments are not required for runtime, some combination of them 
 
 * **--male-as-one**: If the '--run-sex-specific' flag is used then this flag also has to be passed indicating if males were coded as 1 and females as 0 or vice verse. You could pass this flag as '--male-as-one' to indicate that males were coded as 1. The default value is True although this flag will be ignored if the '--run-sex-specific' flag is not provided.
 
-* **--sex-col**: Column name of the column in the covariate fiel containing Sex or Gender information. This flag is required if the '--run-sex-specific' flag was used. 
+* **--sex-col**: Column name of the column in the covariate fiel containing Sex or Gender information. This flag is required if the '--run-sex-specific' flag was used.
 
-* **--phecode-descriptions**: comma separated file 
+* **--phecode-descriptions**: comma separated file
 
-# Example Command:
+# Example Command
+
 **Non sex stratified with parallelization**:
+
 ```bash
 pyphewas \
     --counts counts.csv \
@@ -86,6 +93,7 @@ pyphewas \
 ```
 
 **Sex Stratified with parallelization**:
+
 ```bash
 pyphewas \
     --counts counts.csv \
