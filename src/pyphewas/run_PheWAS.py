@@ -349,7 +349,29 @@ def _write_to_file(
         output_filehandle.write(f"{output_str}\n")
 
 
-def read_in_phecode_descriptions(descriptions_filepath: Path | None) -> dict[str, str]:
+def read_in_phecode_descriptions(
+    descriptions_filepath: Path | None,
+) -> dict[str, tuple[str, str]]:
+    """Read in the descriptions for each phecode
+
+    Parameters
+    ----------
+    descriptions_filepath : Path | None
+        file containing the PheCode ID, text description, and then
+        the phecode category.This code expects the PheCode id to be
+        the 1st column and the phecode description to be the 4th
+        column of each phecode and the phecode category to be the
+        6th column
+
+    Returns
+    _______
+    dict[str,tuple[str,str]]
+        returns a dictionary where the phecode id is the key and the
+        value is a tuple that has the phecode text description and
+        the phecode category. If the descriptions_filepath is none
+        then the function returns an empty dictionary
+
+    """
     description_dict = {}
 
     if descriptions_filepath:
