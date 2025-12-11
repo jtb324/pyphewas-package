@@ -1,6 +1,6 @@
 [project]
 name = "pyphewas-package"
-version = "0.3.1b"
+version = "0.3.1"
 description = "CLI tool to run a PheWAS"
 authors = [{ name = "James Baker", email = "james.baker@vanderbilt.edu" }]
 dependencies = [
@@ -25,10 +25,10 @@ make_manhattan = "pyphewas.plotting:main"
 
 [project.optional-dependencies]
 docs = [
-    "sphinx>=8.1.3",
-    "sphinx-autobuild>=2024.10.3",
-    "sphinx-copybutton>=0.5.2",
-    "sphinx-book-theme>=1.1.4",
+  "sphinx>=8.1.3",
+  "sphinx-autobuild>=2024.10.3",
+  "sphinx-copybutton>=0.5.2",
+  "sphinx-book-theme>=1.1.4",
 ]
 [build-system]
 requires = ["pdm-backend"]
