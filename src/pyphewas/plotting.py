@@ -1,4 +1,3 @@
-from typing_extensions import Format
 from rich_argparse import RichHelpFormatter
 import numpy as np
 import argparse
