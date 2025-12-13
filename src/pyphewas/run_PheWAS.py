@@ -146,16 +146,17 @@ def run_regression(
     regression_model: str,
     max_iteration_count: int,
 ) -> RegressionResults:
+    covariate_df = covariates.to_pandas()
     try:
         if regression_model == "logistic":
-            result = smf.logit(model_eq, data=covariates).fit(
+            result = smf.logit(model_eq, data=covariate_df).fit(
                 disp=0, maxiter=max_iteration_count
             )
         else:
             # run the linear model
-            result = smf.glm(formula=model_eq, data=covariates, family=Gaussian()).fit(
-                disp=0, maxiter=max_iteration_count
-            )
+            result = smf.glm(
+                formula=model_eq, data=covariate_df, family=Gaussian()
+            ).fit(disp=0, maxiter=max_iteration_count)
 
         result = _format_results(result)
         error = None
@@ -181,7 +182,7 @@ def check_err(error_obj: Exception) -> int:
         raise error_obj
 
 
-def run_logit_regression(
+def run_phewas(
     phecode_info: tuple,
     return_dictionary: DictProxy,
     covariates: pl.DataFrame,
@@ -502,7 +503,7 @@ def main() -> None:
 
         # running the logistic regression for multiple phecodes
         partial_func = partial(
-            run_logit_regression,
+            run_phewas,
             return_dictionary=managed_dict,
             covariates=covariates_df.clone(),
             analysis_str=model_str,
