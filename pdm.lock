@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:5d4670af0cea2c07773c33299425c77649ed3afd9d0782029f1b47bb1bbd4dd2"
+content_hash = "sha256:317bd45a6124cb59764e6a3c8608a3296ae3c4d9b48d807cb7a77b8ba826b2a7"
 
 [[metadata.targets]]
 requires_python = ">3.11.0"
@@ -1258,7 +1258,7 @@ files = [
 
 [[package]]
 name = "patsy"
-version = "1.0.1"
+version = "1.0.2"
 requires_python = ">=3.6"
 summary = "A Python package for describing statistical models and for building design matrices."
 groups = ["default"]
@@ -1266,8 +1266,8 @@ dependencies = [
     "numpy>=1.4",
 ]
 files = [
-    {file = "patsy-1.0.1-py2.py3-none-any.whl", hash = "sha256:751fb38f9e97e62312e921a1954b81e1bb2bcda4f5eeabaf94db251ee791509c"},
-    {file = "patsy-1.0.1.tar.gz", hash = "sha256:e786a9391eec818c054e359b737bbce692f051aee4c661f4141cc88fb459c0c4"},
+    {file = "patsy-1.0.2-py2.py3-none-any.whl", hash = "sha256:37bfddbc58fcf0362febb5f54f10743f8b21dd2aa73dec7e7ef59d1b02ae668a"},
+    {file = "patsy-1.0.2.tar.gz", hash = "sha256:cdc995455f6233e90e22de72c37fcadb344e7586fb83f06696f54d92f8ce74c0"},
 ]
 
 [[package]]

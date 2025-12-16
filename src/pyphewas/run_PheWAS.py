@@ -21,6 +21,8 @@ from statsmodels.tools.sm_exceptions import (
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
+from firthmodels import FirthLogisticRegression
+from patsy import dmatrix
 import multiprocessing as mp
 import warnings
 
@@ -70,14 +72,10 @@ def _format_results(
 ) -> dict[str, Any]:
     result_dictionary = {}
     # We need to first get the convered status
-    # print(int(observation_count) - case_count)
     result_dictionary["converged"] = str(results.converged)
 
-    # generate a table with the beta, stderr, and pvalue for each variable in the model #TODO: refactor
-    print("")
     for key, pvalue in results.pvalues.items():
 
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
         # # We don't need to report the values for the intercept
         if key == "Intercept":
             continue
@@ -88,7 +86,6 @@ def _format_results(
 
         result_dictionary[f"{key}_pvalue"] = pvalue
     for key, beta in results.params.items():
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
         # # We don't need to report the values for the intercept
         if key == "Intercept":
             continue
@@ -97,7 +94,6 @@ def _format_results(
 
         result_dictionary[f"{key}_beta"] = beta
     for key, se in results.bse.items():
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
         # # We don't need to report the values for the intercept
         if key == "Intercept":
             continue
@@ -105,8 +101,6 @@ def _format_results(
             key = key.split("_")[0]
 
         result_dictionary[f"{key}_stderr"] = se
-        #     result_dictionary[f"{variable}_beta"] = beta
-        #     result_dictionary[f"{variable}_stderr"] = stderr
 
     return result_dictionary
 
@@ -180,6 +174,32 @@ def check_err(error_obj: Exception) -> int:
         return 0
     else:
         raise error_obj
+
+
+def run_firth_regression(model_eq: str, data: pl.DataFrame) -> RegressionResults:
+    """firth regression model if the program encounters a perfect
+    separation error. The function uses patsy to create the inputs
+    correctly and then runs the firth regression
+
+    Parameters
+    ----------
+    model_eq : str
+        This is the regression equation that is formed
+        generate_model_str function
+
+    data : pl.DataFrame
+        This is the covariate file that also has the phecode predictor and the outcome
+    """
+
+    data_df = data.to_pandas()
+
+    # dmatrics is from patsy and will automatically generate two
+    # matrices for the X and y inputs in the firth regression model
+    outcomes, predictors = dmatrix(model_eq, data_df)
+
+    firth_model = FirthLogisticRegression().fit(predictors, outcomes)
+
+    return RegressionResults("", {}, None)
 
 
 def run_phewas(
@@ -280,6 +300,7 @@ def run_phewas(
         print(
             f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
         )
+
         return
 
     # Lets add the counts to the results dictionary
