@@ -543,6 +543,7 @@ def main() -> None:
             sample_colname=args.sample_col,
             min_case_count=args.min_case_count,
             max_iteration_threshold=args.max_iterations,
+            save_state_on_error=args.record_perfect_separation,
         )
         try:
             for _ in pool.imap(
