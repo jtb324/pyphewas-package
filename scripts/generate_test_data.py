@@ -4,6 +4,8 @@ import numpy as np
 import numpy.typing as npt
 import argparse
 from rich_argparse import RichHelpFormatter
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def generate_covariates(
@@ -67,9 +69,12 @@ def generate_phecode_counts(
     signal_strength: float,
     min_percent: float,
     predictor_data: npt.NDArray,
+    signal_phecode_index: int,
+    perfect_separation_index: int,
     seed: int = 42,
     target_phecode_count: int = 0,
     target_phecode_index: int = 0,
+    inject_perfect_separation: bool = False,
 ) -> pd.DataFrame:
     """
     Generates a Long-Format DataFrame of phecode counts.
@@ -120,9 +125,36 @@ def generate_phecode_counts(
             # Set their count to 1
             final_counts[selected_indices] = 1
 
+        elif inject_perfect_separation and i == perfect_separation_index:
+            # Inject perfect separation for the last phecode
+            print(f"Injecting perfect separation for phecode: {code_name}")
+            # We determine cases based strictly on the predictor value to ensure perfect separation.
+            # Subjects with predictor > median are eligible to be cases.
+            # Subjects with predictor <= median are strictly controls (0 count).
+
+            threshold = np.median(predictor_data)
+            eligible_mask = predictor_data > threshold
+
+            # Initialize all as 0
+            has_disease = np.zeros(n_subjects, dtype=int)
+            eligible_indices = np.where(eligible_mask)[0]
+
+            # Assign disease status to a subset of eligible individuals (e.g., 50%)
+            # This ensures we have cases, but they ALL fall into the "predictor > median" group.
+            if len(eligible_indices) > 0:
+                disease_status = rng.binomial(1, 0.5, size=len(eligible_indices))
+                # Ensure at least one case exists if possible
+                if np.sum(disease_status) == 0:
+                    disease_status[0] = 1
+                has_disease[eligible_indices] = disease_status
+
+            # Generate counts for those with the disease (>= 2)
+            random_counts = 1 + rng.geometric(p=0.4, size=n_subjects)
+            final_counts = has_disease * random_counts
+
         else:
             # 1. Determine Baseline Probability
-            if i == 10:
+            if i == signal_phecode_index:
                 # Target signal is always somewhat common so we can detect it
                 target_base = max(0.05, min_percent)
                 base_prob = rng.uniform(target_base, max_prob)
@@ -132,11 +164,12 @@ def generate_phecode_counts(
                 base_prob = np.exp(log_prob)
 
             # 2. Linear Predictor (Logit)
+            # 2. Linear Predictor (Logit)
             intercept = np.log(base_prob / (1 - base_prob))
             logit = intercept + (0.05 * rng.standard_normal(n_subjects))
 
             # 3. Inject Signal
-            if i == 10:
+            if i == signal_phecode_index:
                 logit += signal_strength * predictor_data
 
             # 4. Convert to Binary Presence (0 or 1)
@@ -164,6 +197,96 @@ def generate_phecode_counts(
     final_df = long_df[long_df["count"] > 0].reset_index(drop=True)
 
     return final_df
+
+
+def plot_demographics(df: pd.DataFrame, output_dir: Path, run_suffix: str = ""):
+    """
+    Plots the distribution of age and a histogram of sex values.
+    Saves the plots to the 'plots' subdirectory within the output directory.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe containing 'age' and 'sex' columns.
+    output_dir : Path
+        Directory to save the plots.
+    run_suffix : str
+        Suffix to append to the filename (e.g. for uniqueness).
+    """
+    plot_dir = output_dir / "plots"
+    if not plot_dir.exists():
+        plot_dir.mkdir(parents=True)
+        print(f"Creating plots directory: {plot_dir}")
+
+    # Plot Age Distribution
+    plt.figure(figsize=(10, 6))
+    sns.histplot(df["age"], kde=True, color="skyblue")
+    plt.title("Age Distribution")
+    plt.xlabel("Age")
+    plt.ylabel("Count")
+
+    age_plot_path = plot_dir / f"age_distribution{run_suffix}.png"
+    plt.savefig(age_plot_path)
+    plt.close()
+    print(f"Saved age distribution plot to {age_plot_path}")
+
+    # Plot Sex Distribution
+    plt.figure(figsize=(10, 6))
+    # We map 0/1 to Female/Male for better labeling if desired, or just plot raw.
+    # The prompt asks to "say how many males and females there are".
+    # We can rely on x-axis labels or a legend.
+    ax = sns.countplot(x="sex", data=df)
+    plt.title("Sex Distribution")
+    plt.xlabel("Sex (0=Female, 1=Male)")
+    plt.ylabel("Count")
+
+    # Add count labels on top of bars
+    for p in ax.patches:
+        ax.annotate(
+            f"{p.get_height()}",
+            (p.get_x() + p.get_width() / 2.0, p.get_height()),
+            ha="center",
+            va="center",
+            xytext=(0, 5),
+            textcoords="offset points",
+        )
+
+    sex_plot_path = plot_dir / f"sex_distribution{run_suffix}.png"
+    plt.savefig(sex_plot_path)
+    plt.close()
+    print(f"Saved sex distribution plot to {sex_plot_path}")
+
+
+def log_run_info(args, cov_path, phe_path):
+    """Writes run information to a log file."""
+    log_path = args.output_dir / args.log_filename
+    with open(log_path, "w") as f:
+        f.write("Run Information\n")
+        f.write("===============\n")
+        f.write(f"Sample Count: {args.sample_count}\n")
+        f.write(f"Phecode Count: {args.phecode_count}\n")
+        f.write(f"Predictor Type: {args.predictor_type}\n")
+        f.write(f"Signal Strength: {args.signal_strength}\n")
+        f.write(f"Seed: {args.seed}\n")
+        f.write(f"Output Directory: {args.output_dir}\n")
+        f.write(f"Covariates File: {cov_path}\n")
+        f.write(f"Phecodes File: {phe_path}\n\n")
+
+        f.write("Injected Signals\n")
+        f.write("================\n")
+        f.write(
+            f"Phecode with Signal: phecode_{args.signal_phecode_index} (Signal Strength: {args.signal_strength})\n"
+        )
+
+        if args.target_phecode_count > 0:
+            f.write(
+                f"Target Count Phecode: phecode_{args.target_phecode_index} (Count: {args.target_phecode_count})\n"
+            )
+
+        if args.inject_perfect_separation:
+            f.write(
+                f"Perfect Separation Phecode: phecode_{args.perfect_separation_index}\n"
+            )
 
 
 def main():
@@ -223,18 +346,73 @@ def main():
         "--target-phecode-index",
         type=int,
         default=0,
-        help="The index of the phecode (e.g., 0 for phecode_0, 1 for phecode_1) that should have the target count specified by --target-phecode-count.",
+        help="The index of the phecode (e.g., 0 for phecode_0, 1 for phecode_1) that should have the target count specified by --target-phecode-count. (default: %(default)s)",
     )
     parser.add_argument(
-        "--min-phecode-count",
+        "--target-phecode-count",
         type=int,
+        default=0,
         help="Minimum number of samples (count) for a phecode. If set, this overrides --min-phecode-prevalence. Calculates prevalence as min_count / sample_count.",
+    )
+    parser.add_argument(
+        "--signal-phecode-index",
+        type=int,
+        default=10,
+        help="Index of the phecode to inject a significant signal into. (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--perfect-separation-index",
+        type=int,
+        help="Index of the phecode to inject perfect separation into. (default: %(default)s).",
+        default=-1,
+    )
+    parser.add_argument(
+        "--inject-perfect-separation",
+        action="store_true",
+        help="If set, injects perfect separation for the specified phecode index.",
+    )
+    parser.add_argument(
+        "--log-filename",
+        type=str,
+        required=True,
+        help="Filename for the log file containing run information.",
     )
     parser.add_argument(
         "--seed", type=int, default=1234, help="Random seed for reproducibility."
     )
+    parser.add_argument(
+        "--save-plots",
+        action="store_true",
+        help="If set, saves demographic plots to the output directory.",
+    )
 
     args = parser.parse_args()
+
+    # if args.perfect_separation_index is None:
+    #     args.perfect_separation_index = args.phecode_count - 1
+
+    # Validation: Ensure phecode count is sufficient for indices
+    # max_index = max(args.target_phecode_index, args.signal_phecode_index, args.perfect_separation_index)
+    # We need to makes sure that all our indices are within the
+    # bounds of the number of phecodes that the user wants
+    assert (
+        args.phecode_count >= args.signal_phecode_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.signal_phecode_index + 1}."
+
+    assert (
+        args.phecode_count >= args.target_phecode_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.target_phecode_index + 1}."
+
+    assert (
+        args.phecode_count >= args.perfect_separation_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.perfect_separation_index + 1}."
+
+    # We also need to make sure that all our indices are not the same
+    assert (
+        args.perfect_separation_index
+        != args.target_phecode_index
+        != args.signal_phecode_index
+    ), "ERROR: the indices for the perfect_separation, the target_phecode, and the signal_phecode cannot all be the same"
 
     # Lets make sure that the output directory exists:
     if not args.output_dir.exists():
@@ -243,14 +421,12 @@ def main():
             f"Creating the output directory, {args.output_dir}, to write simulated data into"
         )
 
-    covariate_output_path = (
-        args.output_dir
-        / f"covariates_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
-    )
-    phecode_output_path = (
-        args.output_dir
-        / f"phecodes_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
-    )
+    sep_suffix = "_perfect_sep" if args.inject_perfect_separation else ""
+
+    file_unique_suffix = f"_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}"
+
+    covariate_output_path = args.output_dir / f"covariates_file{file_unique_suffix}.txt"
+    phecode_output_path = args.output_dir / f"phecodes_file{file_unique_suffix}.txt"
 
     cov_df = generate_covariates(
         args.sample_count, args.predictor_type, args.seed, args.mean_age
@@ -259,6 +435,10 @@ def main():
     cov_df.to_csv(covariate_output_path, sep=",", index=None)
 
     print(f"Saved the generated covariates file to {covariate_output_path}")
+
+    # Generate demographic plots
+    if args.save_plots:
+        plot_demographics(cov_df, args.output_dir, file_unique_suffix)
 
     samples = cov_df.id.tolist()
 
@@ -272,13 +452,18 @@ def main():
         min_percent=args.min_phecode_prevalence,
         predictor_data=predictor_values,
         seed=args.seed,
-        target_phecode_count=args.min_phecode_count,
+        target_phecode_count=args.target_phecode_count,
         target_phecode_index=args.target_phecode_index,
+        inject_perfect_separation=args.inject_perfect_separation,
+        signal_phecode_index=args.signal_phecode_index,
+        perfect_separation_index=args.perfect_separation_index,
     )
 
     phecode_counts_df.to_csv(phecode_output_path, sep=",", index=None)
 
     print(f"Saved the generated phecode counts file to {phecode_output_path}")
+
+    log_run_info(args, covariate_output_path, phecode_output_path)
 
 
 if __name__ == "__main__":

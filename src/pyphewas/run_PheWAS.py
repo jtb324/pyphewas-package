@@ -12,22 +12,23 @@ from pathlib import Path
 from xopen import xopen
 import polars as pl
 from tqdm import tqdm
-from typing import Any
 import statsmodels.formula.api as smf
-from statsmodels.discrete.discrete_model import BinaryResultsWrapper
-from statsmodels.genmod.generalized_linear_model import GLMResultsWrapper
 from statsmodels.genmod.families.family import Gaussian
+from sklearn.exceptions import ConvergenceWarning as SklearnConvergenceWarning
 from statsmodels.tools.sm_exceptions import (
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
+from firthmodels import FirthLogisticRegression
+from patsy import dmatrices
 import tempfile
 import multiprocessing as mp
 import warnings
 
 from pyphewas.parser import generate_parser
+from pyphewas.model_formatters import format_results, format_firth_results, ModelResults
 
-# We want to treat the Runtime warning like a error so that we can catch it because it generate indicates the perfect separation error
+# We want to treat the Runtime warning like a error so that we can catch it because it indicates the perfect separation error
 warnings.filterwarnings("error", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("error", category=PerfectSeparationWarning)
@@ -66,50 +67,6 @@ def read_in_cases_and_exclusions(
     return return_dict
 
 
-def _format_results(
-    results: BinaryResultsWrapper | GLMResultsWrapper,
-) -> dict[str, Any]:
-    result_dictionary = {}
-    # We need to first get the convered status
-    # print(int(observation_count) - case_count)
-    result_dictionary["converged"] = str(results.converged)
-
-    for key, pvalue in results.pvalues.items():
-
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
-        # # We don't need to report the values for the intercept
-        if key == "Intercept":
-            continue
-        elif (
-            key == "phecode_status"
-        ):  # if the phecode is being used as a predictor then we need to ultimately
-            key = key.split("_")[0]
-
-        result_dictionary[f"{key}_pvalue"] = pvalue
-    for key, beta in results.params.items():
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
-        # # We don't need to report the values for the intercept
-        if key == "Intercept":
-            continue
-        elif key == "phecode_status":
-            key = key.split("_")[0]
-
-        result_dictionary[f"{key}_beta"] = beta
-    for key, se in results.bse.items():
-        # variable, beta, stderr, z, pvalue, *_ = line.strip().replace(" ", "").split(",")
-        # # We don't need to report the values for the intercept
-        if key == "Intercept":
-            continue
-        elif key == "phecode_status":
-            key = key.split("_")[0]
-
-        result_dictionary[f"{key}_stderr"] = se
-        #     result_dictionary[f"{variable}_beta"] = beta
-        #     result_dictionary[f"{variable}_stderr"] = stderr
-
-    return result_dictionary
-
-
 def generate_model_str(
     covar_list: list[str] | None,
     status_col: str,
@@ -135,7 +92,8 @@ def generate_model_str(
 @dataclass
 class RegressionResults:
     model_type: str
-    result: dict[str, Any]
+    result: ModelResults
+    firth_used: bool
     err: Exception | None
 
 
@@ -157,7 +115,7 @@ def run_regression(
                 formula=model_eq, data=covariate_df, family=Gaussian()
             ).fit(disp=0, maxiter=max_iteration_count)
 
-        result = _format_results(result)
+        result = format_results(result)
         error = None
 
         # In the case of any exception we are going to just return the error and result will be None
@@ -165,7 +123,9 @@ def run_regression(
         result = {}
         error = e
 
-    return RegressionResults(model_type=regression_model, result=result, err=error)
+    return RegressionResults(
+        model_type=regression_model, result=result, err=error, firth_used=False
+    )
 
 
 def check_err(error_obj: Exception) -> int:
@@ -179,6 +139,50 @@ def check_err(error_obj: Exception) -> int:
         return 0
     else:
         raise error_obj
+
+
+def run_firth_regression(model_eq: str, data: pl.DataFrame) -> RegressionResults:
+    """firth regression model if the program encounters a perfect
+    separation error. The function uses patsy to create the inputs
+    correctly and then runs the firth regression
+
+    Parameters
+    ----------
+    model_eq : str
+        This is the regression equation that is formed
+        generate_model_str function
+
+    data : pl.DataFrame
+        This is the covariate file that also has the phecode predictor and the outcome
+    """
+
+    data_df = data.to_pandas()
+
+    # dmatrics is from patsy and will automatically generate two
+    # matrices for the X and y inputs in the firth regression model
+    outcomes, predictors = dmatrices(model_eq, data_df)
+
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", category=SklearnConvergenceWarning)
+            firth_model = FirthLogisticRegression(fit_intercept=False).fit(
+                predictors, outcomes.ravel()
+            )
+
+        feature_names = predictors.design_info.column_names
+
+        result = format_firth_results(firth_model, feature_names)
+        error = None
+    except SklearnConvergenceWarning as e:
+        result = {}
+        error = e
+    except Exception as e:
+        result = {}
+        error = e
+
+    return RegressionResults(
+        model_type="firth", result=result, err=error, firth_used=True
+    )
 
 
 def run_phewas(
@@ -310,12 +314,19 @@ def run_phewas(
                 )
 
         _ = check_err(results.err)
-        print(
-            f"Perfect separation encountered for phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
-        )
-        return
+        print(f"Using firth regression for the phecode, {phecode_name}.")
+
+        results = run_firth_regression(analysis_str, covariates_df)
+
+        if results.err is not None:
+            print(
+                f"Perfect separation encountered for the phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
+            )
+
+            return
 
     # Lets add the counts to the results dictionary
+    results.result["firth"] = results.firth_used
     results.result["case_count"] = case_count
     results.result["control_count"] = control_count
     results.result["exclusion_count"] = exclusion_count
@@ -334,7 +345,7 @@ def _generate_header(
     else:  # otherwise the string starts with phecode and uses the status name we provided
         phecode_name_str = "phecode"
 
-    header_str = f"{phecode_name_str}\tphecode_description\tphecode_category\tcase_count\tcontrol_count\texclusion_count\tconverged"
+    header_str = f"{phecode_name_str}\tphecode_description\tphecode_category\tcase_count\tcontrol_count\texclusion_count\tconverged\tfirth"
 
     header_str += f"\t{status_name}_pvalue"
     header_str += f"\t{status_name}_beta"
@@ -367,7 +378,7 @@ def _write_to_file(
             phecode_name, ("N/A", "N/A")
         )
 
-        output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('exclusion_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}"
+        output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('exclusion_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}\t{phecode_results.get('firth', 'N/A')}"
 
         # lets add all the values for the status to the string first
 
