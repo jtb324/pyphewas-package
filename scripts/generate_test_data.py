@@ -70,6 +70,7 @@ def generate_phecode_counts(
     seed: int = 42,
     target_phecode_count: int = 0,
     target_phecode_index: int = 0,
+    inject_perfect_separation: bool = False,
 ) -> pd.DataFrame:
     """
     Generates a Long-Format DataFrame of phecode counts.
@@ -120,6 +121,33 @@ def generate_phecode_counts(
             # Set their count to 1
             final_counts[selected_indices] = 1
 
+        elif inject_perfect_separation and i == n_phecodes - 1:
+            # Inject perfect separation for the last phecode
+            print(f"Injecting perfect separation for phecode: {code_name}")
+            # We determine cases based strictly on the predictor value to ensure perfect separation.
+            # Subjects with predictor > median are eligible to be cases.
+            # Subjects with predictor <= median are strictly controls (0 count).
+
+            threshold = np.median(predictor_data)
+            eligible_mask = predictor_data > threshold
+
+            # Initialize all as 0
+            has_disease = np.zeros(n_subjects, dtype=int)
+            eligible_indices = np.where(eligible_mask)[0]
+
+            # Assign disease status to a subset of eligible individuals (e.g., 50%)
+            # This ensures we have cases, but they ALL fall into the "predictor > median" group.
+            if len(eligible_indices) > 0:
+                disease_status = rng.binomial(1, 0.5, size=len(eligible_indices))
+                # Ensure at least one case exists if possible
+                if np.sum(disease_status) == 0:
+                    disease_status[0] = 1
+                has_disease[eligible_indices] = disease_status
+
+            # Generate counts for those with the disease (>= 2)
+            random_counts = 1 + rng.geometric(p=0.4, size=n_subjects)
+            final_counts = has_disease * random_counts
+
         else:
             # 1. Determine Baseline Probability
             if i == 10:
@@ -164,6 +192,39 @@ def generate_phecode_counts(
     final_df = long_df[long_df["count"] > 0].reset_index(drop=True)
 
     return final_df
+
+
+def log_run_info(args, cov_path, phe_path, n_phecodes):
+    """Writes run information to a log file."""
+    log_path = args.output_dir / args.log_filename
+    with open(log_path, "w") as f:
+        f.write("Run Information\n")
+        f.write("===============\n")
+        f.write(f"Sample Count: {args.sample_count}\n")
+        f.write(f"Phecode Count: {args.phecode_count}\n")
+        f.write(f"Predictor Type: {args.predictor_type}\n")
+        f.write(f"Signal Strength: {args.signal_strength}\n")
+        f.write(f"Seed: {args.seed}\n")
+        f.write(f"Output Directory: {args.output_dir}\n")
+        f.write(f"Covariates File: {cov_path}\n")
+        f.write(f"Phecodes File: {phe_path}\n\n")
+
+        f.write("Injected Signals\n")
+        f.write("================\n")
+        if args.phecode_count > 10:
+            f.write(
+                f"Phecode with Signal: phecode_10 (Signal Strength: {args.signal_strength})\n"
+            )
+        else:
+            f.write("No signal injected (phecode count <= 10)\n")
+
+        if args.target_phecode_count > 0:
+            f.write(
+                f"Target Count Phecode: phecode_{args.target_phecode_index} (Count: {args.target_phecode_count})\n"
+            )
+
+        if args.inject_perfect_separation:
+            f.write(f"Perfect Separation Phecode: phecode_{n_phecodes - 1}\n")
 
 
 def main():
@@ -226,9 +287,21 @@ def main():
         help="The index of the phecode (e.g., 0 for phecode_0, 1 for phecode_1) that should have the target count specified by --target-phecode-count.",
     )
     parser.add_argument(
-        "--min-phecode-count",
+        "--target-phecode-count",
         type=int,
+        default=0,
         help="Minimum number of samples (count) for a phecode. If set, this overrides --min-phecode-prevalence. Calculates prevalence as min_count / sample_count.",
+    )
+    parser.add_argument(
+        "--inject-perfect-separation",
+        action="store_true",
+        help="If set, injects perfect separation for the last phecode (index N-1).",
+    )
+    parser.add_argument(
+        "--log-filename",
+        type=str,
+        required=True,
+        help="Filename for the log file containing run information.",
     )
     parser.add_argument(
         "--seed", type=int, default=1234, help="Random seed for reproducibility."
@@ -272,13 +345,16 @@ def main():
         min_percent=args.min_phecode_prevalence,
         predictor_data=predictor_values,
         seed=args.seed,
-        target_phecode_count=args.min_phecode_count,
+        target_phecode_count=args.target_phecode_count,
         target_phecode_index=args.target_phecode_index,
+        inject_perfect_separation=args.inject_perfect_separation,
     )
 
     phecode_counts_df.to_csv(phecode_output_path, sep=",", index=None)
 
     print(f"Saved the generated phecode counts file to {phecode_output_path}")
+
+    log_run_info(args, covariate_output_path, phecode_output_path, args.phecode_count)
 
 
 if __name__ == "__main__":
