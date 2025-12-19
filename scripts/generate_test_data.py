@@ -67,6 +67,8 @@ def generate_phecode_counts(
     signal_strength: float,
     min_percent: float,
     predictor_data: npt.NDArray,
+    signal_phecode_index: int,
+    perfect_separation_index: int,
     seed: int = 42,
     target_phecode_count: int = 0,
     target_phecode_index: int = 0,
@@ -121,7 +123,7 @@ def generate_phecode_counts(
             # Set their count to 1
             final_counts[selected_indices] = 1
 
-        elif inject_perfect_separation and i == n_phecodes - 1:
+        elif inject_perfect_separation and i == perfect_separation_index:
             # Inject perfect separation for the last phecode
             print(f"Injecting perfect separation for phecode: {code_name}")
             # We determine cases based strictly on the predictor value to ensure perfect separation.
@@ -150,7 +152,7 @@ def generate_phecode_counts(
 
         else:
             # 1. Determine Baseline Probability
-            if i == 10:
+            if i == signal_phecode_index:
                 # Target signal is always somewhat common so we can detect it
                 target_base = max(0.05, min_percent)
                 base_prob = rng.uniform(target_base, max_prob)
@@ -160,11 +162,12 @@ def generate_phecode_counts(
                 base_prob = np.exp(log_prob)
 
             # 2. Linear Predictor (Logit)
+            # 2. Linear Predictor (Logit)
             intercept = np.log(base_prob / (1 - base_prob))
             logit = intercept + (0.05 * rng.standard_normal(n_subjects))
 
             # 3. Inject Signal
-            if i == 10:
+            if i == signal_phecode_index:
                 logit += signal_strength * predictor_data
 
             # 4. Convert to Binary Presence (0 or 1)
@@ -194,7 +197,7 @@ def generate_phecode_counts(
     return final_df
 
 
-def log_run_info(args, cov_path, phe_path, n_phecodes):
+def log_run_info(args, cov_path, phe_path):
     """Writes run information to a log file."""
     log_path = args.output_dir / args.log_filename
     with open(log_path, "w") as f:
@@ -211,12 +214,9 @@ def log_run_info(args, cov_path, phe_path, n_phecodes):
 
         f.write("Injected Signals\n")
         f.write("================\n")
-        if args.phecode_count > 10:
-            f.write(
-                f"Phecode with Signal: phecode_10 (Signal Strength: {args.signal_strength})\n"
-            )
-        else:
-            f.write("No signal injected (phecode count <= 10)\n")
+        f.write(
+            f"Phecode with Signal: phecode_{args.signal_phecode_index} (Signal Strength: {args.signal_strength})\n"
+        )
 
         if args.target_phecode_count > 0:
             f.write(
@@ -224,7 +224,9 @@ def log_run_info(args, cov_path, phe_path, n_phecodes):
             )
 
         if args.inject_perfect_separation:
-            f.write(f"Perfect Separation Phecode: phecode_{n_phecodes - 1}\n")
+            f.write(
+                f"Perfect Separation Phecode: phecode_{args.perfect_separation_index}\n"
+            )
 
 
 def main():
@@ -293,9 +295,20 @@ def main():
         help="Minimum number of samples (count) for a phecode. If set, this overrides --min-phecode-prevalence. Calculates prevalence as min_count / sample_count.",
     )
     parser.add_argument(
+        "--signal-phecode-index",
+        type=int,
+        default=10,
+        help="Index of the phecode to inject a significant signal into.",
+    )
+    parser.add_argument(
+        "--perfect-separation-index",
+        type=int,
+        help="Index of the phecode to inject perfect separation into. Defaults to N-1.",
+    )
+    parser.add_argument(
         "--inject-perfect-separation",
         action="store_true",
-        help="If set, injects perfect separation for the last phecode (index N-1).",
+        help="If set, injects perfect separation for the specified phecode index.",
     )
     parser.add_argument(
         "--log-filename",
@@ -309,6 +322,50 @@ def main():
 
     args = parser.parse_args()
 
+    # if args.perfect_separation_index is None:
+    #     args.perfect_separation_index = args.phecode_count - 1
+
+    # Validation: Ensure phecode count is sufficient for indices
+    # max_index = max(args.target_phecode_index, args.signal_phecode_index, args.perfect_separation_index)
+    # We need to makes sure that all our indices are within the
+    # bounds of the number of phecodes that the user wants
+    assert (
+        args.phecode_count >= args.signal_phecode_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.signal_phecode_index + 1}."
+
+    assert (
+        args.phecode_count >= args.target_phecode_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.target_phecode_index + 1}."
+
+    assert (
+        args.phecode_count >= args.perfect_separation_index + 1
+    ), f"ERROR: requested number of phecodes {args.phecode_count} is less than the specified phecode to be significant, {args.perfect_separation_index + 1}."
+
+    # We also need to make sure that all our indices are not the same
+    assert (
+        args.perfect_separation_index
+        != args.target_phecode_index
+        != args.signal_phecode_index
+    ), "ERROR: the indices for the perfect_separation, the target_phecode, and the signal_phecode cannot all be the same"
+
+    # Validation: Ensure no collisions
+    active_indices = {
+        "signal": args.signal_phecode_index,
+    }
+    if args.target_phecode_count > 0:
+        active_indices["target"] = args.target_phecode_index
+    if args.inject_perfect_separation:
+        active_indices["perfect_separation"] = args.perfect_separation_index
+
+    # Check for collisions among active indices
+    seen_indices = {}
+    for name, idx in active_indices.items():
+        if idx in seen_indices:
+            parser.error(
+                f"Index collision detected: '{name}' and '{seen_indices[idx]}' both use index {idx}."
+            )
+        seen_indices[idx] = name
+
     # Lets make sure that the output directory exists:
     if not args.output_dir.exists():
         args.output_dir.mkdir()
@@ -316,13 +373,15 @@ def main():
             f"Creating the output directory, {args.output_dir}, to write simulated data into"
         )
 
+    sep_suffix = "_perfect_sep" if args.inject_perfect_separation else ""
+
     covariate_output_path = (
         args.output_dir
-        / f"covariates_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
+        / f"covariates_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}.txt"
     )
     phecode_output_path = (
         args.output_dir
-        / f"phecodes_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes.txt"
+        / f"phecodes_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}.txt"
     )
 
     cov_df = generate_covariates(
@@ -348,13 +407,15 @@ def main():
         target_phecode_count=args.target_phecode_count,
         target_phecode_index=args.target_phecode_index,
         inject_perfect_separation=args.inject_perfect_separation,
+        signal_phecode_index=args.signal_phecode_index,
+        perfect_separation_index=args.perfect_separation_index,
     )
 
     phecode_counts_df.to_csv(phecode_output_path, sep=",", index=None)
 
     print(f"Saved the generated phecode counts file to {phecode_output_path}")
 
-    log_run_info(args, covariate_output_path, phecode_output_path, args.phecode_count)
+    log_run_info(args, covariate_output_path, phecode_output_path)
 
 
 if __name__ == "__main__":

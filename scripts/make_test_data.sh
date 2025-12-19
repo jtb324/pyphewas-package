@@ -11,14 +11,19 @@ else
   echo "The directory, ${RELATIVE_TEST_INPUTS_DIR}, already exists"
 fi
 
+echo "generating binary phenotype data"
+
 python3 $PYTHON_SCRIPT \
   --sample-count 10000 \
   --phecode-count 30 \
   --predictor-type binary \
   --output-dir $RELATIVE_TEST_INPUTS_DIR \
   --target-phecode-index 10 \
-  --min-phecode-count 80 \
-  --seed 1234
+  --target-phecode-count 80 \
+  --seed 1234 \
+  --log-filename test_binary_predictory_with_min_phecode.log
+
+echo "generating continuous phenotype data"
 
 python3 $PYTHON_SCRIPT \
   --sample-count 10000 \
@@ -26,7 +31,20 @@ python3 $PYTHON_SCRIPT \
   --predictor-type dosage \
   --output-dir $RELATIVE_TEST_INPUTS_DIR \
   --target-phecode-index 10 \
-  --min-phecode-count 80 \
-  --seed 1234
+  --target-phecode-count 80 \
+  --seed 1234 \
+  --log-filename test_dosage_with_min_phecode.log
+
+echo "generating binary phenotype with an example of perfect separation"
+
+# This command will ensure that there is perfect separation for a phenotype to test firth regression
+python3 $PYTHON_SCRIPT \
+  --sample-count 10000 \
+  --phecode-count 30 \
+  --predictor-type binary \
+  --output-dir $RELATIVE_TEST_INPUTS_DIR \
+  --seed 1234 \
+  --inject-perfect-separation \
+  --log-filename test_perfect_separation.log
 
 echo finished creating the test inputs

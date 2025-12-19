@@ -1,0 +1,15 @@
+Run Information
+===============
+Sample Count: 500
+Phecode Count: 20
+Predictor Type: binary
+Signal Strength: 1.5
+Seed: 1234
+Output Directory: tests/inputs_perfect_sep
+Covariates File: tests/inputs_perfect_sep/covariates_file_500_samples_binary_predictor_20_phecodes.txt
+Phecodes File: tests/inputs_perfect_sep/phecodes_file_500_samples_binary_predictor_20_phecodes.txt
+
+Injected Signals
+================
+Phecode with Signal: phecode_10 (Signal Strength: 1.5)
+Perfect Separation Phecode: phecode_19
