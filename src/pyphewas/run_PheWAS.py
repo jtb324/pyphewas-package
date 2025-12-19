@@ -21,6 +21,7 @@ from statsmodels.tools.sm_exceptions import (
 )
 from firthmodels import FirthLogisticRegression
 from patsy import dmatrices
+import tempfile
 import multiprocessing as mp
 import warnings
 
@@ -193,12 +194,14 @@ def run_phewas(
     min_case_count: int,
     max_iteration_threshold: int,
     regression_model: str = "logistic",
+    save_state_on_error: bool = False,
 ) -> None:
     """method to run regress for the phenotype of interest
     Parameters
     ----------
     phecode_info : tuple
-        tuple that has information for the regression such as what the phecode name is and who are the cases/controls/and exclusions
+        tuple that has information for the regression such as what the
+        phecode name is and who are the cases/controls/and exclusions
 
     return_dictionary : DictProxy
         Dictionary that is being shared between the different
@@ -226,6 +229,11 @@ def run_phewas(
     regression_mode : str
         string indicating whether we are trying to run a
         linear regression model or a logistic regression model
+
+    save_state_on_error : bool
+        boolean argument indicating whether the user wishes to
+        save the inputs to the regression when an error is encountered.
+        This flag is mainly used for debugging
 
     """
 
@@ -278,6 +286,33 @@ def run_phewas(
     if results.err is not None:
         # Check if the error is a perfect separation error or if
         # it needs to crash the program
+        if save_state_on_error:
+            if not Path("./tmp").exists():
+                Path("./tmp").mkdir(exist_ok=True)
+            tempfile_path = Path(
+                tempfile.mkdtemp(prefix="perfect_separation_", dir="./tmp")
+            )
+            print(
+                f"regression error encountered. Saving the state of the program in the temp directory here: {Path('./tmp').absolute()}"
+            )
+            covariates_df.write_csv(
+                tempfile_path / f"{tempfile_path.name}_covariate_df.txt",
+                sep="\t",
+                index=None,
+            )
+
+            with open(tempfile_path, "w") as error_file:
+                error_file.write(
+                    f"Perfect Separtion encountered for phecode: {phecode_name}\n"
+                )
+                error_file.write(
+                    f"Case count: {case_count}, Control count: {control_count}, Exclusion count: {exclusion_count}\n"
+                )
+                error_file.write(f"Analysis string: {analysis_str}\n")
+                error_file.write(
+                    f"Using the max iteration threshold: {max_iteration_threshold}\n"
+                )
+
         _ = check_err(results.err)
         print(f"Using firth regression for the phecode, {phecode_name}.")
 
@@ -519,6 +554,7 @@ def main() -> None:
             sample_colname=args.sample_col,
             min_case_count=args.min_case_count,
             max_iteration_threshold=args.max_iterations,
+            save_state_on_error=args.record_perfect_separation,
         )
         try:
             for _ in pool.imap(
