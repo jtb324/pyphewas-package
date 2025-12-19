@@ -20,7 +20,9 @@ python3 $PYTHON_SCRIPT \
   --output-dir $RELATIVE_TEST_INPUTS_DIR \
   --target-phecode-index 10 \
   --target-phecode-count 80 \
+  --signal-phecode-index 15 \
   --seed 1234 \
+  --save-plots \
   --log-filename test_binary_predictory_with_min_phecode.log
 
 echo "generating continuous phenotype data"
@@ -32,7 +34,9 @@ python3 $PYTHON_SCRIPT \
   --output-dir $RELATIVE_TEST_INPUTS_DIR \
   --target-phecode-index 10 \
   --target-phecode-count 80 \
+  --signal-phecode-index 15 \
   --seed 1234 \
+  --save-plots \
   --log-filename test_dosage_with_min_phecode.log
 
 echo "generating binary phenotype with an example of perfect separation"
@@ -45,6 +49,9 @@ python3 $PYTHON_SCRIPT \
   --output-dir $RELATIVE_TEST_INPUTS_DIR \
   --seed 1234 \
   --inject-perfect-separation \
+  --perfect-separation-index 10 \
+  --signal-phecode-index 15 \
+  --save-plots \
   --log-filename test_perfect_separation.log
 
 echo finished creating the test inputs

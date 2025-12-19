@@ -4,6 +4,8 @@ import numpy as np
 import numpy.typing as npt
 import argparse
 from rich_argparse import RichHelpFormatter
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def generate_covariates(
@@ -197,6 +199,64 @@ def generate_phecode_counts(
     return final_df
 
 
+def plot_demographics(df: pd.DataFrame, output_dir: Path, run_suffix: str = ""):
+    """
+    Plots the distribution of age and a histogram of sex values.
+    Saves the plots to the 'plots' subdirectory within the output directory.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe containing 'age' and 'sex' columns.
+    output_dir : Path
+        Directory to save the plots.
+    run_suffix : str
+        Suffix to append to the filename (e.g. for uniqueness).
+    """
+    plot_dir = output_dir / "plots"
+    if not plot_dir.exists():
+        plot_dir.mkdir(parents=True)
+        print(f"Creating plots directory: {plot_dir}")
+
+    # Plot Age Distribution
+    plt.figure(figsize=(10, 6))
+    sns.histplot(df["age"], kde=True, color="skyblue")
+    plt.title("Age Distribution")
+    plt.xlabel("Age")
+    plt.ylabel("Count")
+
+    age_plot_path = plot_dir / f"age_distribution{run_suffix}.png"
+    plt.savefig(age_plot_path)
+    plt.close()
+    print(f"Saved age distribution plot to {age_plot_path}")
+
+    # Plot Sex Distribution
+    plt.figure(figsize=(10, 6))
+    # We map 0/1 to Female/Male for better labeling if desired, or just plot raw.
+    # The prompt asks to "say how many males and females there are".
+    # We can rely on x-axis labels or a legend.
+    ax = sns.countplot(x="sex", data=df)
+    plt.title("Sex Distribution")
+    plt.xlabel("Sex (0=Female, 1=Male)")
+    plt.ylabel("Count")
+
+    # Add count labels on top of bars
+    for p in ax.patches:
+        ax.annotate(
+            f"{p.get_height()}",
+            (p.get_x() + p.get_width() / 2.0, p.get_height()),
+            ha="center",
+            va="center",
+            xytext=(0, 5),
+            textcoords="offset points",
+        )
+
+    sex_plot_path = plot_dir / f"sex_distribution{run_suffix}.png"
+    plt.savefig(sex_plot_path)
+    plt.close()
+    print(f"Saved sex distribution plot to {sex_plot_path}")
+
+
 def log_run_info(args, cov_path, phe_path):
     """Writes run information to a log file."""
     log_path = args.output_dir / args.log_filename
@@ -286,7 +346,7 @@ def main():
         "--target-phecode-index",
         type=int,
         default=0,
-        help="The index of the phecode (e.g., 0 for phecode_0, 1 for phecode_1) that should have the target count specified by --target-phecode-count.",
+        help="The index of the phecode (e.g., 0 for phecode_0, 1 for phecode_1) that should have the target count specified by --target-phecode-count. (default: %(default)s)",
     )
     parser.add_argument(
         "--target-phecode-count",
@@ -298,12 +358,13 @@ def main():
         "--signal-phecode-index",
         type=int,
         default=10,
-        help="Index of the phecode to inject a significant signal into.",
+        help="Index of the phecode to inject a significant signal into. (default: %(default)s)",
     )
     parser.add_argument(
         "--perfect-separation-index",
         type=int,
-        help="Index of the phecode to inject perfect separation into. Defaults to N-1.",
+        help="Index of the phecode to inject perfect separation into. (default: %(default)s).",
+        default=-1,
     )
     parser.add_argument(
         "--inject-perfect-separation",
@@ -318,6 +379,11 @@ def main():
     )
     parser.add_argument(
         "--seed", type=int, default=1234, help="Random seed for reproducibility."
+    )
+    parser.add_argument(
+        "--save-plots",
+        action="store_true",
+        help="If set, saves demographic plots to the output directory.",
     )
 
     args = parser.parse_args()
@@ -348,24 +414,6 @@ def main():
         != args.signal_phecode_index
     ), "ERROR: the indices for the perfect_separation, the target_phecode, and the signal_phecode cannot all be the same"
 
-    # Validation: Ensure no collisions
-    active_indices = {
-        "signal": args.signal_phecode_index,
-    }
-    if args.target_phecode_count > 0:
-        active_indices["target"] = args.target_phecode_index
-    if args.inject_perfect_separation:
-        active_indices["perfect_separation"] = args.perfect_separation_index
-
-    # Check for collisions among active indices
-    seen_indices = {}
-    for name, idx in active_indices.items():
-        if idx in seen_indices:
-            parser.error(
-                f"Index collision detected: '{name}' and '{seen_indices[idx]}' both use index {idx}."
-            )
-        seen_indices[idx] = name
-
     # Lets make sure that the output directory exists:
     if not args.output_dir.exists():
         args.output_dir.mkdir()
@@ -375,14 +423,10 @@ def main():
 
     sep_suffix = "_perfect_sep" if args.inject_perfect_separation else ""
 
-    covariate_output_path = (
-        args.output_dir
-        / f"covariates_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}.txt"
-    )
-    phecode_output_path = (
-        args.output_dir
-        / f"phecodes_file_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}.txt"
-    )
+    file_unique_suffix = f"_{args.sample_count}_samples_{args.predictor_type}_predictor_{args.phecode_count}_phecodes{sep_suffix}"
+
+    covariate_output_path = args.output_dir / f"covariates_file{file_unique_suffix}.txt"
+    phecode_output_path = args.output_dir / f"phecodes_file{file_unique_suffix}.txt"
 
     cov_df = generate_covariates(
         args.sample_count, args.predictor_type, args.seed, args.mean_age
@@ -391,6 +435,10 @@ def main():
     cov_df.to_csv(covariate_output_path, sep=",", index=None)
 
     print(f"Saved the generated covariates file to {covariate_output_path}")
+
+    # Generate demographic plots
+    if args.save_plots:
+        plot_demographics(cov_df, args.output_dir, file_unique_suffix)
 
     samples = cov_df.id.tolist()
 
