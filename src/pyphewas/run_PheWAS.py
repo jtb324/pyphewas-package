@@ -281,19 +281,19 @@ def run_phewas(
         analysis_str, covariates_df, regression_model, max_iteration_threshold
     )
 
-    if results.err is not None:
+    if results.err is not None and regression_model == "logistic":
 
         _ = check_err(results.err)
         print(f"Using firth regression for the phecode, {phecode_name}.")
 
         results = run_firth_regression(analysis_str, covariates_df)
 
-        if results.err is not None:
-            print(
-                f"Perfect separation encountered for the phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
-            )
+    if results.err is not None:
+        print(
+            f"Perfect separation encountered for the phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
+        )
 
-            return
+        return
 
     # Lets add the counts to the results dictionary
     results.result["firth"] = results.firth_used
