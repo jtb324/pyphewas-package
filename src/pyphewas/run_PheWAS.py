@@ -4,14 +4,25 @@ from datetime import datetime
 from functools import partial
 import io
 import json
-from multiprocessing.managers import DictProxy
 import signal
 import sys
-import numpy as np
 from pathlib import Path
-from xopen import xopen
-import polars as pl
 from tqdm import tqdm
+import warnings
+import os
+
+# Make sure underlying libraries are using 1 thread to avoid livelocking
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["POLARS_MAX_THREADS"] = "1"
+
+import numpy as np
+from xopen import xopen
+from firthmodels import FirthLogisticRegression
+from patsy import dmatrices
+import multiprocessing as mp
 import statsmodels.formula.api as smf
 from statsmodels.genmod.families.family import Gaussian
 from sklearn.exceptions import ConvergenceWarning as SklearnConvergenceWarning
@@ -19,10 +30,8 @@ from statsmodels.tools.sm_exceptions import (
     ConvergenceWarning,
     PerfectSeparationWarning,
 )
-from firthmodels import FirthLogisticRegression
-from patsy import dmatrices
-import multiprocessing as mp
-import warnings
+import polars as pl
+from multiprocessing.managers import DictProxy
 
 from pyphewas.parser import generate_parser
 from pyphewas.model_formatters import format_results, format_firth_results, ModelResults
@@ -140,7 +149,9 @@ def check_err(error_obj: Exception) -> int:
         raise error_obj
 
 
-def run_firth_regression(model_eq: str, data: pl.DataFrame) -> RegressionResults:
+def run_firth_regression(
+    model_eq: str, data: pl.DataFrame, max_iters: int
+) -> RegressionResults:
     """firth regression model if the program encounters a perfect
     separation error. The function uses patsy to create the inputs
     correctly and then runs the firth regression
@@ -153,6 +164,15 @@ def run_firth_regression(model_eq: str, data: pl.DataFrame) -> RegressionResults
 
     data : pl.DataFrame
         This is the covariate file that also has the phecode predictor and the outcome
+
+    max_iters : int
+        maximum number of iterations to try to get the regression model to
+        converge. If it doesn't converge after these iterations then the
+        model throws a ConvergenceWarning
+
+    Returns
+    -------
+    RegressionResults
     """
 
     data_df = data.to_pandas()
@@ -164,9 +184,9 @@ def run_firth_regression(model_eq: str, data: pl.DataFrame) -> RegressionResults
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings("error", category=SklearnConvergenceWarning)
-            firth_model = FirthLogisticRegression(fit_intercept=False).fit(
-                predictors, outcomes.ravel()
-            )
+            firth_model = FirthLogisticRegression(
+                max_iters=max_iters, fit_intercept=False
+            ).fit(predictors, outcomes.ravel())
 
         feature_names = predictors.design_info.column_names
 
@@ -192,6 +212,7 @@ def run_phewas(
     sample_colname: str,
     min_case_count: int,
     max_iteration_threshold: int,
+    max_firth_iterations: int,
     regression_model: str = "logistic",
 ) -> None:
     """method to run regress for the phenotype of interest
@@ -224,14 +245,13 @@ def run_phewas(
         This value can be increased if a large number of the
         regressions don't converge
 
+    max_firth_iterations : int
+        maximum number of iterations for the FirthLogisticRegression
+        model to converge.
+
     regression_mode : str
         string indicating whether we are trying to run a
         linear regression model or a logistic regression model
-
-    save_state_on_error : bool
-        boolean argument indicating whether the user wishes to
-        save the inputs to the regression when an error is encountered.
-        This flag is mainly used for debugging
 
     """
 
@@ -286,7 +306,9 @@ def run_phewas(
         _ = check_err(results.err)
         print(f"Using firth regression for the phecode, {phecode_name}.")
 
-        results = run_firth_regression(analysis_str, covariates_df)
+        results = run_firth_regression(
+            analysis_str, covariates_df, max_firth_iterations
+        )
 
     if results.err is not None:
         print(
@@ -477,8 +499,12 @@ def main() -> None:
         f"Requiring {args.min_case_count} cases for a phecode to be included in the analysis"
     )
     print(
-        f"Using a maximum number of {args.max_iterations} iterations for the logistic regression model"
+        f"Using a maximum number of {args.max_iterations} iterations for the {args.model} regression model"
     )
+    if args.model == "logistic":
+        print(
+            f"Using a maximum number of {args.firth_max_iterations} iterations for the firth regression model when perfect separation is encountered"
+        )
     print(f"{80*'~'}\n")
     print(f"Loading in the phecode descriptions found here: {phecode_descriptions}")
 
@@ -524,6 +550,8 @@ def main() -> None:
             sample_colname=args.sample_col,
             min_case_count=args.min_case_count,
             max_iteration_threshold=args.max_iterations,
+            max_firth_iterations=args.firth_max_iterations,
+            regression_model=args.model,
         )
         try:
             for _ in pool.imap(
