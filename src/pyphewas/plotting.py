@@ -72,15 +72,16 @@ def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> Formatt
         df.filter(pl.col("neg_log10_p").is_finite())
         .select(pl.col("neg_log10_p").max())
         .item()
-        * 1.02
     )
+
+    infinity_adj_value = max_finite_val * 1.02
 
     print(f"replacing infinite values in the dataframe with {max_finite_val}")
 
     df = (
         df.with_columns(
             pl.when(~pl.col("neg_log10_p").is_finite())
-            .then(max_finite_val)
+            .then(infinity_adj_value)
             .otherwise(pl.col("neg_log10_p"))
         )
         .with_columns(
