@@ -532,7 +532,7 @@ def main() -> None:
 
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     with (
-        mp.get_context("spawn").Pool(processes=args.cpus) as pool,
+        mp.get_context("spawn").Pool(maxtasksperchild=50, processes=args.cpus) as pool,
         xopen(args.output, "w") as output_file,
         tqdm(total=item_count, desc="phecodes processed") as pbar,
     ):
@@ -566,8 +566,6 @@ def main() -> None:
         else:
             pool.close()
             pool.join()
-
-        # results = run_logit_regression(managed_dict, phecode_cases, covariates_df, args.covariate_list, args.status_col, args.sample_col,args.min_case_count)
 
         phecodes_tested = len(managed_dict)
 

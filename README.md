@@ -4,7 +4,7 @@ A python script I use to run PheWAS analyses. Full Documentation can be found he
 
 ## Summary
 
-This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors.
+This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors. The PyPhewas-package supports both logistic and linear regression. Additionally, this package will use Firth Regression when a perfect separation error is encountered in the logistic model.
 
 ## Installation
 
@@ -113,3 +113,5 @@ pyphewas \
     --male-as-one True \
     --sex-col EHR_GENDER
 ```
+
+*note on parallelization*: Generally using logistic regression is faster than the linear model. This observation is also true in this package. The logistic model is faster and more memory efficient than the linear model. In testing the linear model, each "process" (defined as each CPU in the commandline arguments) used between 10-16 GB of RAM and the total process took ~60 minutes. The logistic model ran on 30 GB of RAM total with 15 CPUs over 30 minutes. Both of these comparisons were run for a set of ~1.6 million individuals. You can test how the linear model we perform on you machine by just running it with 2 cpus for about 250 phecodes and seeing what the memory is for each python process.
