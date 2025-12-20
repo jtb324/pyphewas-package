@@ -4,11 +4,11 @@ A python script I use to run PheWAS analyses. Full Documentation can be found he
 
 ## Summary
 
-This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors.
+This repository contains a CLI tool implemented in python that can be used to run a PheWAS analysis. This script supports both PheCode 1.2 and PheCode X (read about each [here](https://phewascatalog.org/phewas/#home)). This package is based on the [PheTK](https://github.com/nhgritctran/PheTK) package but offers flexibility in the model that I wanted and has a more verbose output by reporting the betas and standard errors for all predictors. The PyPhewas-package supports both logistic and linear regression. Additionally, this package will use Firth Regression when a perfect separation error is encountered in the logistic model.
 
 ## Installation
 
-This code is hosted on PYPI and can be install using a package manager such as conda or pip. If using Pip it is recommend to first make a virtualenv using venv and then installing the program into the virtual environment. Use the following commands to install the program.
+This code is hosted on PYPI and can be installed using a package manager such as conda or pip. If using Pip it is recommended to first make a virtualenv using venv and then installing the program into the virtual environment. Use the following commands to install the program.
 
 ```bash Pip installation
 python3 -m venv pyphewas-venv
@@ -26,7 +26,7 @@ conda activate pyphewas_env
 pip install pyphewas-package
 ```
 
-If you would like to install the PyPheWAS Package from source it is avaliable on [Github](https://github.com/jtb324/PyPheWAS). It is recommended to use [PDM](https://pdm-project.org/latest/) to install the project. To install the PyPheWAS package from source using PDM, run the following command:
+If you would like to install the PyPheWAS Package from source it is available on [Github](https://github.com/jtb324/PyPheWAS). It is recommended to use [PDM](https://pdm-project.org/latest/) to install the project. To install the PyPheWAS package from source using PDM, run the following command:
 
 ```bash PDM installation
 pdm install
@@ -38,7 +38,7 @@ If you want to install the program from source code without PDM then you must fi
 
 * **--counts**: filepath to a comma separated file where each row has a ID, a phecode id, and the number of times that individual has that phecode in their medical record.
 
-* **--covariate-file**: filepath to a comma separated file that list the covariates and predictor for each individual. The individuals listed in the covariate file will be the individuals in the cohort. *Note* If the 'flip-predictor-and-outcome' flag is used then the predictor variable is assumed to be the outcome in the model.
+* **--covariate-file**: filepath to a comma separated file that lists the covariates and predictor for each individual. The individuals listed in the covariate file will be the individuals in the cohort. *Note* If the 'flip-predictor-and-outcome' flag is used then the predictor variable is assumed to be the outcome in the model.
 
 * **--covariate-list**: Space separated list of covariates to use in the model. All of these covariates must be present in the covariate file and must be spelled exactly the same otherwise the code will crash.
 
@@ -46,9 +46,9 @@ If you want to install the program from source code without PDM then you must fi
 
 ## Optional Inputs
 
-Although these arguments are not required for runtime, some combination of them will general be used to make the analysis either more rigorous, more robust, or more fine tuned for the exact question being asked.
+Although these arguments are not required for runtime, some combination of them will generally be used to make the analysis either more rigorous, more robust, or more fine tuned for the exact question being asked.
 
-* **--min-phecode-count**: Minimum number of phecodes an individual is required to have in order to be considered a case for a phecode. Default value is 2. Under default settings, all individuals with 1 occurence of the phecode are excluded from the regression. If this value is set to 1 then there are no excluded individuals.
+* **--min-phecode-count**: Minimum number of phecodes an individual is required to have in order to be considered a case for a phecode. Default value is 2. Under default settings, all individuals with 1 occurrence of the phecode are excluded from the regression. If this value is set to 1 then there are no excluded individuals.
 
 * **--min-case-count**: Minimum number of cases a phecode has to have to be included in the analysis. The default value is 20. There is no rigorous testing behind this value, only convention. For more rigorous results, a more conservative value of 100 may be ideal.
 
@@ -58,7 +58,7 @@ Although these arguments are not required for runtime, some combination of them 
 
 * **--output**: filename to write the output to. The output will be written as a tab separated file. If the suffix of the file ends in gz then the file will be gzipped otherwise the file will be uncompressed. Default value is test_output.txt
 
-* **--phecode-descriptions**: filepath to a comma separated file that list the phecode ID and the corresponding phecode name. There are default description files stored in the './src/phecode_maps/' folder if you wish to see example files that are currently used in the code. The phecode ID is expected to be the first column while the phecode description is expected to be the 4th column.
+* **--phecode-descriptions**: filepath to a comma separated file that lists the phecode ID and the corresponding phecode name. There are default description files stored in the './src/phecode_maps/' folder if you wish to see example files that are currently used in the code. The phecode ID is expected to be the first column while the phecode description is expected to be the 4th column.
 
 * **--cpus**: Number of cpus to use during the analysis. Default value is 1.
 
@@ -68,11 +68,13 @@ Although these arguments are not required for runtime, some combination of them 
 
 * **--run-sex-specific**: Depending on the analysis, you may also want to restrict the analysis to a sex stratified cohort. This command is one of three flags that have to be used in tandem that allow you to stratify the analysis. Allowed values are 'male-only' and 'female-only'.
 
-* **--male-as-one**: If the '--run-sex-specific' flag is used then this flag also has to be passed indicating if males were coded as 1 and females as 0 or vice verse. You could pass this flag as '--male-as-one' to indicate that males were coded as 1. The default value is True although this flag will be ignored if the '--run-sex-specific' flag is not provided.
+* **--male-as-one**: If the '--run-sex-specific' flag is used then this flag also has to be passed indicating if males were coded as 1 and females as 0 or vice versa. You could pass this flag as '--male-as-one' to indicate that males were coded as 1. The default value is True although this flag will be ignored if the '--run-sex-specific' flag is not provided.
 
-* **--sex-col**: Column name of the column in the covariate fiel containing Sex or Gender information. This flag is required if the '--run-sex-specific' flag was used.
+* **--sex-col**: Column name of the column in the covariate file containing Sex or Gender information. This flag is required if the '--run-sex-specific' flag was used. Values should be coded numerically as 0 or 1.
 
-* **--phecode-descriptions**: comma separated file
+* **--model**: Whether to run a linear model or a logistic model for the regression. Default value is 'logistic'. Allowed values are 'linear' and 'logistic'.
+
+* **--firth-max-iterations**: Maximum number of iterations to try for firth regression model to converge. Default value is 50.
 
 # Example Command
 
@@ -111,3 +113,5 @@ pyphewas \
     --male-as-one True \
     --sex-col EHR_GENDER
 ```
+
+*note on parallelization*: Generally using logistic regression is faster than the linear model. This observation is also true in this package. The logistic model is faster and more memory efficient than the linear model. In testing the linear model, each "process" (defined as each CPU in the commandline arguments) used between 10-16 GB of RAM and the total process took ~60 minutes. The logistic model ran on 30 GB of RAM total with 15 CPUs over 30 minutes. Both of these comparisons were run for a set of ~1.6 million individuals. You can test how the linear model we perform on you machine by just running it with 2 cpus for about 250 phecodes and seeing what the memory is for each python process.
