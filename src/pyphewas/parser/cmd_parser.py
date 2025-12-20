@@ -136,11 +136,4 @@ def generate_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s: {version('pyphewas-package')}",
     )
 
-    parser.add_argument(
-        "--record-perfect-separation",
-        action="store_true",
-        default=False,
-        help="Whether or not to store the state of the program when a perfect separation error is encountered. This flag is mainly used for debugging and will save the inputs being passed to the regression when the perfect separation is encountered",
-    )
-
     return parser
