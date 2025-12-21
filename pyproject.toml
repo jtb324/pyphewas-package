@@ -1,7 +1,7 @@
 [project]
 description = "CLI tool to run a PheWAS"
 name = "pyphewas-package"
-version = "0.4.2b3"
+version = "0.4.2"
 authors = [{ name = "James Baker", email = "james.baker@vanderbilt.edu" }]
 dependencies = [
   "polars>=1.31.0",
