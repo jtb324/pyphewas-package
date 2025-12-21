@@ -6,12 +6,12 @@
 PyPheWAS documentation
 ======================
 
-**PyPheWAS** is my personal python script for running PheWAS within python. It is highly influenced by both the R `PheWAS package <https://github.com/PheWAS/PheWAS/>`_ and the python `PheTK package <https://github.com/nhgritctran/PheTK>`_ package while *hopefully* providing some beneficial differences. This package allows users to run either a linear or logistic regression model for the phewas and uses modern python libraries such as "polars" to bring better performance in larger dataset.
+**PyPheWAS** is my personal Python script for running PheWAS within Python. It is highly influenced by both the R `PheWAS package <https://github.com/PheWAS/PheWAS/>`_ and the Python `PheTK package <https://github.com/nhgritctran/PheTK>`_ package while *hopefully* providing some beneficial differences. This package allows users to run either a linear or logistic regression model for the PheWAS and uses modern Python libraries such as "polars" to bring better performance in larger datasets.
 
 
 Installation:
 -------------
-This code is hosted on PYPI and can be installed using Pip. It is recommended to install the package into a virtualenv. The PyPheWAS-package only supports python3.10+ so make sure that you have this installed on your computer. The commands to do this are shown below
+This code is hosted on PYPI and can be installed using Pip. It is recommended to install the package into a virtual environment. The PyPheWAS-package only supports Python 3.11.1+ so make sure that you have this installed on your computer. The commands to do this are shown below
 
 .. code:: python
 
@@ -27,7 +27,7 @@ Using the PyPheWAS package:
 ---------------------------
 The PyPheWAS package has 2 main functions explained below:
 
-* **pyphewas** - This command calls the script that performs the PheWAS for the dataset. The program will determine cases/controls/exclusions from the provided phecode counts file and will used these classifications in the regression. This code will generate p-values, betas, and standard errors for every term in the model (Ex. If you had three predictors age, sex, and record length, then you would have three columns in the output for each predictor representing p-values, betas, and standard errors).
+* **pyphewas** - This command calls the script that performs the PheWAS for the dataset. The program will determine cases/controls/exclusions from the provided phecode counts file and will use these classifications in the regression. This code will generate p-values, betas, and standard errors for every term in the model (Ex. If you had three predictors age, sex, and record length, then you would have three columns in the output for each predictor representing p-values, betas, and standard errors).
 
 .. note::
 
@@ -35,21 +35,21 @@ The PyPheWAS package has 2 main functions explained below:
 
   Case/control/exclusion definition for each phecodes is performed using the following 3 steps:
   
-  1. If an inidividual has the phecode in their record on 2+ unique dates then they are a case
+  1. If an individual has the phecode in their record on 2+ unique dates then they are a case
 
-  2. If the individual has only 1 occurence of the code in their record then they are excluded (This step is skipped if the user has lowered the minimum case threshold from 2 to 1)
+  2. If the individual has only 1 occurrence of the code in their record then they are excluded (This step is skipped if the user has lowered the minimum case threshold from 2 to 1)
 
-  3. All other indivduals are classified as controls
+  3. All other individuals are classified as controls
 
 
-* **make_manhattan** - This command calls the script responsible for generating a manhattan plot from the PheWAS results. It is designed for the results from the pyphewas command, but has flexibility for other results from other programs as long as that program has p-values and betas.
+* **make_manhattan** - This command calls the script responsible for generating a Manhattan plot from the PheWAS results. It is designed for the results from the pyphewas command, but has flexibility for other results from other programs as long as that program has p-values and betas.
 
 
 Example Commands:
 -----------------
 **Running a PheWAS for binary covariates**
 
-The following command illustrates how to run a phewas for the provided test data. In this example, our data represents a binary phenotype of interest where individuals are either cases or controls. For this example we can assume that all test data is in the "tests/inputs" directory of the repository (You can go to the repository using the github icon at the top right section of the page near the contents menu). This command filters the phecode counts so that cases must have 2 or more occurences of the phecode. Additionally, this example only includes phecodes which have 100 or more cases. . 
+The following command illustrates how to run a PheWAS for the provided test data. In this example, our data represents a binary phenotype of interest where individuals are either cases or controls. For this example we can assume that all test data is in the "tests/inputs" directory of the repository (You can go to the repository using the github icon at the top right section of the page near the contents menu). This command filters the phecode counts so that cases must have 2 or more occurrences of the phecode. Additionally, this example only includes phecodes which have 100 or more cases.
 
 .. code:: bash
 
@@ -66,8 +66,7 @@ The following command illustrates how to run a phewas for the provided test data
       --phecode-version None \
       --model logistic 
 
-To run a linear regression it is as simple as changing the model flag from "logistic" to "linear" as shown below. This will change the model from statsmodel.formula logit to the statsmodel.formula glm with the Gaussian family
-. 
+To run a linear regression it is as simple as changing the model flag from "logistic" to "linear" as shown below. This will change the model from statsmodel.formula logit to the statsmodel.formula glm with the Gaussian family.
 
 .. code:: bash
 
@@ -85,8 +84,9 @@ To run a linear regression it is as simple as changing the model flag from "logi
       --phecode-version None \
       --model linear
 
-**Generating a manhattan plot from the data**
-The PyPheWAS package also has the ability to generate a manhattan plot from the output of the pyphewas command. The command below uses the output from the example pyphewas commands above to generate a (*bad in this case*) manhattan plot. The user is expected to provided the name of the columns with the p-values and betas for the variable of interest.
+**Generating a Manhattan plot from the data**
+
+The PyPheWAS package also has the ability to generate a Manhattan plot from the output of the pyphewas command. The command below uses the output from the example pyphewas commands above to generate a (*bad in this case*) Manhattan plot. The user is expected to provide the name of the columns with the p-values and betas for the variable of interest.
 
 .. code:: bash
 
@@ -99,7 +99,7 @@ The PyPheWAS package also has the ability to generate a manhattan plot from the 
 
 .. note::
 
-  This functionality can also be used in a juypter notebook. The different python functions used in the make_manhattan command are exposed through the package. This example only shows how to run the CLI command, but users can read more about running the code in a jupyter notebook in the "insert section here".
+  This functionality can also be used in a jupyter notebook. The different python functions used in the make_manhattan command are exposed through the package. This example only shows how to run the CLI command, but users can read more about running the code in a jupyter notebook in the "insert section here".
 
     
 
