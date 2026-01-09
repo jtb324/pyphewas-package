@@ -6,12 +6,21 @@ import polars as pl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from dataclasses import dataclass
+from adjustText import adjust_text
 
 
 @dataclass
 class FormattedDf:
     dataframe: pl.DataFrame
     infinity_threshold: float
+
+
+@dataclass
+class AnnotationConfig:
+    annotate: bool = False
+    limit: float = 5
+    font_size: int = 8
+    text_col: str = "phecode_description"
 
 
 def determine_color_palatte(category_count: int) -> list[tuple]:
@@ -74,7 +83,7 @@ def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> Formatt
         .item()
     )
 
-    infinity_adj_value = max_finite_val * 1.02
+    infinity_adj_value = max_finite_val * 1.05
 
     print(f"replacing infinite values in the dataframe with {max_finite_val}")
 
@@ -102,7 +111,9 @@ def generate_manhatten(
     output_filename: Path | str,
     significance_threshold: float,
     dpi: int = 300,
+    ymax: int = 0,
     color_palette: list[tuple] | None = None,
+    annotation_config: AnnotationConfig | None = None,
 ) -> None:
 
     df = formatted_results.dataframe
@@ -117,6 +128,10 @@ def generate_manhatten(
 
     plot_data = df.to_pandas()
 
+    if ymax != 0:
+
+        plt.ylim(bottom=0, top=ymax)
+
     sns.scatterplot(
         data=plot_data,
         x="index",
@@ -130,6 +145,44 @@ def generate_manhatten(
         edgecolor="black",  # Black edge helps separate the colors further
         linewidth=0.5,
     )
+
+    if annotation_config and annotation_config.annotate:
+        texts = []
+        unique_categories = df["phecode_category"].unique()
+        for category in unique_categories:
+            category_df = df.filter(pl.col("phecode_category") == category).sort(
+                "neg_log10_p", descending=True
+            )
+
+            # Determine how many points to annotate for this category
+            n_points = len(category_df)
+            limit = annotation_config.limit
+
+            if limit < 1.0:
+                # Treat as percentage
+                num_annotate = int(np.ceil(n_points * limit))
+            else:
+                # Treat as hard count
+                num_annotate = int(limit)
+
+            # Ensure we don't try to take more than exists
+            num_annotate = min(num_annotate, n_points)
+
+            # Take the top hits
+            top_hits = category_df.head(num_annotate)
+
+            for row in top_hits.iter_rows(named=True):
+                texts.append(
+                    plt.text(
+                        x=row["index"],
+                        y=row["neg_log10_p"],
+                        s=row[annotation_config.text_col],
+                        fontsize=annotation_config.font_size,
+                    )
+                )
+
+        if texts:
+            adjust_text(texts)
 
     # Threshold lines
     plt.axhline(
@@ -260,6 +313,40 @@ def main() -> None:
         help="quality of the image to output. (default: %(default)s)",
     )
 
+    parser.add_argument(
+        "--ymax",
+        type=int,
+        default=0,
+        help="Maximum value for the y-axis of the manhattan plot",
+    )
+
+    parser.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Whether to annotate the top hits on the plot.",
+    )
+
+    parser.add_argument(
+        "--annotation-limit",
+        type=float,
+        default=5,
+        help="Number of hits to annotate per category (if >= 1) or percentage of hits (if < 1). (default: %(default)s)",
+    )
+
+    parser.add_argument(
+        "--annotation-font-size",
+        type=int,
+        default=8,
+        help="Font size for the annotations. (default: %(default)s)",
+    )
+
+    parser.add_argument(
+        "--annotation-text-col",
+        type=str,
+        default="phecode_description",
+        help="Column name to use for annotation text. (default: %(default)s)",
+    )
+
     args = parser.parse_args()
 
     # read in the dataframe
@@ -268,8 +355,20 @@ def main() -> None:
     significance_threshold = 0.05 / df.shape[0]
     formatted_df_results = format_df(df, args.pval_col, args.beta_col)
 
+    annotation_config = AnnotationConfig(
+        annotate=args.annotate,
+        limit=args.annotation_limit,
+        font_size=args.annotation_font_size,
+        text_col=args.annotation_text_col,
+    )
+
     generate_manhatten(
-        formatted_df_results, args.output_file, significance_threshold, dpi=args.dpi
+        formatted_df_results,
+        args.output_file,
+        significance_threshold,
+        dpi=args.dpi,
+        ymax=args.ymax,
+        annotation_config=annotation_config,
     )
 
 
