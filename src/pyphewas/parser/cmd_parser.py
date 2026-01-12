@@ -133,7 +133,7 @@ def generate_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--firth-max-iterations",
         type=int,
-        default=50,
+        default=200,
         help="Maximum number of iterations to try for firth regression model to converge",
     )
 
