@@ -425,6 +425,27 @@ def restrict_covars_to_specific_sex(
     return output_df
 
 
+def check_for_correct_cols(covariate_df_cols: list[str], covar_cols: list[str]) -> bool:
+    """check if all of the columns from the covariates passed by the user (covar_cols)
+    are in the covariate_df
+
+    Parameters
+    ----------
+    covariate_df_cols : list[str]
+        list of all of the columns in the covariates df
+
+    covar_cols : list[str]
+        list of covariates that were passed by the user
+
+    Returns
+    -------
+    bool
+        returns true if all columns are found or false if any of the columns are not
+        found
+    """
+    return any(col not in covariate_df_cols for col in covar_cols)
+
+
 def main() -> None:
 
     parser = generate_parser()
@@ -514,8 +535,13 @@ def main() -> None:
 
     covariates_df = pl.read_csv(args.covariate_file)
 
+    # Make a function here that checks if the correct columns are in the covariates df
+    if check_for_correct_cols(covariates_df, args.covariate_list):
+        err_msg = f"Error not all of the covariate columns that the user provided, {args.covariate_list}, were found in the covariate df"
+        raise ValueError(err_msg)
+
     if args.run_sex_specific:
-        print("Restricting the covariates file to {args.run_sex_specific}")
+        print(f"Restricting the covariates file to {args.run_sex_specific}")
         covariates_df = restrict_covars_to_specific_sex(
             covariates_df, args.run_sex_specific, args.sex_col, args.male_as_one
         )
