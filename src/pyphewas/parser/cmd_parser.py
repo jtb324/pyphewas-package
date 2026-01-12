@@ -138,6 +138,13 @@ def generate_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--firth-phecode-count",
+        type=int,
+        default=100,
+        help="Max threshold of the number of cases a phecode has to have for Firth Regression to be applied. Phecodes with fewer cases than this threshold will have Firth applied while phecodes above this threshold will just use general Logistic regression",
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s: {version('pyphewas-package')}",

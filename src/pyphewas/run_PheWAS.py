@@ -213,6 +213,7 @@ def run_phewas(
     min_case_count: int,
     max_iteration_threshold: int,
     max_firth_iterations: int,
+    firth_phecode_threshold: int = 100,
     regression_model: str = "logistic",
 ) -> None:
     """method to run regress for the phenotype of interest
@@ -248,6 +249,11 @@ def run_phewas(
     max_firth_iterations : int
         maximum number of iterations for the FirthLogisticRegression
         model to converge.
+
+    firth_phecode_threshold : int
+        max threshold for the number of cases that a phecode can have
+        without Firth being applied. Phecodes with fewer cases than this
+        will have Firth applied
 
     regression_mode : str
         string indicating whether we are trying to run a
@@ -296,19 +302,27 @@ def run_phewas(
     # We can calculate exclusions by subtracting the final shape from the original shape
     exclusion_count = covariates.shape[0] - covariates_df.shape[0]
 
+    # if phecodes are above this threshold then we should run normal regression
     # run the regression
-    results = run_regression(
-        analysis_str, covariates_df, regression_model, max_iteration_threshold
-    )
+    if case_count <= firth_phecode_threshold and regression_model == "logistic":
+        results = run_firth_regression(
+            analysis_str, covariates_df, max_firth_iterations
+        )
+
+    else:
+        results = run_regression(
+            analysis_str, covariates_df, regression_model, max_iteration_threshold
+        )
 
     if results.err is not None and regression_model == "logistic":
 
         _ = check_err(results.err)
         print(f"Using firth regression for the phecode, {phecode_name}.")
 
-        results = run_firth_regression(
-            analysis_str, covariates_df, max_firth_iterations
-        )
+        if not results.firth_used:
+            results = run_firth_regression(
+                analysis_str, covariates_df, max_firth_iterations
+            )
 
     if results.err is not None:
         print(
@@ -522,6 +536,10 @@ def main() -> None:
     print(
         f"Using a maximum number of {args.max_iterations} iterations for the {args.model} regression model"
     )
+    print(
+        f"firth regression will be applied to all phecodes that have fewer than {args.firth_phecode_count} and still pass the minimum case threshold of {args.min_case_count}"
+        * (args.model == "logistic")
+    )
     if args.model == "logistic":
         print(
             f"Using a maximum number of {args.firth_max_iterations} iterations for the firth regression model when perfect separation is encountered"
@@ -577,6 +595,7 @@ def main() -> None:
             min_case_count=args.min_case_count,
             max_iteration_threshold=args.max_iterations,
             max_firth_iterations=args.firth_max_iterations,
+            firth_phecode_threshold=args.firth_phecode_count,
             regression_model=args.model,
         )
         try:
