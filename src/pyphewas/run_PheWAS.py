@@ -31,7 +31,6 @@ from statsmodels.tools.sm_exceptions import (
     PerfectSeparationWarning,
 )
 import polars as pl
-from multiprocessing.managers import DictProxy
 
 from pyphewas.parser import generate_parser
 from pyphewas.model_formatters import format_results, format_firth_results, ModelResults
@@ -121,7 +120,7 @@ def run_regression(
             # run the linear model
             result = smf.glm(
                 formula=model_eq, data=covariate_df, family=Gaussian()
-            ).fit(disp=0, maxiter=max_iteration_count)
+            ).fit(disp=False, maxiter=max_iteration_count)
 
         result = format_results(result)
         error = None
@@ -143,6 +142,8 @@ def check_err(error_obj: Exception) -> int:
         "Singular matrix" in str(error_obj)
         or "Perfect separation" in str(error_obj)
         or "overflow encountered in exp" in str(error_obj)
+        or "Step-halving failed to converge" in str(error_obj)
+        or isinstance(error_obj, SklearnConvergenceWarning)
     ):
         return 0
     else:
@@ -185,7 +186,7 @@ def run_firth_regression(
         with warnings.catch_warnings():
             warnings.filterwarnings("error", category=SklearnConvergenceWarning)
             firth_model = FirthLogisticRegression(
-                max_iters=max_iters, fit_intercept=False
+                max_iter=max_iters, fit_intercept=False
             ).fit(predictors, outcomes.ravel())
 
         feature_names = predictors.design_info.column_names
@@ -204,10 +205,16 @@ def run_firth_regression(
     )
 
 
+shared_covariates: pl.DataFrame = None
+
+
+def init_worker(covariates: pl.DataFrame):
+    global shared_covariates
+    shared_covariates = covariates
+
+
 def run_phewas(
     phecode_info: tuple,
-    return_dictionary: DictProxy,
-    covariates: pl.DataFrame,
     analysis_str: str,
     sample_colname: str,
     min_case_count: int,
@@ -215,21 +222,13 @@ def run_phewas(
     max_firth_iterations: int,
     firth_phecode_threshold: int = 100,
     regression_model: str = "logistic",
-) -> None:
+) -> tuple[str, dict] | None:
     """method to run regress for the phenotype of interest
     Parameters
     ----------
     phecode_info : tuple
         tuple that has information for the regression such as what the
         phecode name is and who are the cases/controls/and exclusions
-
-    return_dictionary : DictProxy
-        Dictionary that is being shared between the different
-        python processes.
-
-    covariates : pl.DataFrame
-        polars dataframe containing all of the covariates to use
-        in the regression analysis
 
     analysis_str : str
         string for the model that takes the form 'Y=mx+B'
@@ -260,6 +259,8 @@ def run_phewas(
         linear regression model or a logistic regression model
 
     """
+    global shared_covariates
+    covariates = shared_covariates
 
     phecode_name, phecode_obj = phecode_info[0]
 
@@ -281,11 +282,11 @@ def run_phewas(
     # are extract individuals in the counts file then the case count can be higher than
     # it would be in the cohort
     if covariates_df.select(pl.col("phecode_status")).sum().item() < min_case_count:
-        return
+        return None
     # When doing the sex stratified analysis there is a chance that there will be no cases
     # despite how there were originally cases. We need to account for that here.
     if len(covariates_df.select(pl.col("phecode_status").value_counts())) == 1:
-        return
+        return None
     # lets get the counts of cases and controls (This is verbose but adapted from the
     # stackoverflow answer: https://stackoverflow.com/questions/78057705/is-there-a-simple-way-to-access-a-value-in-a-polars-struct)
     case_count = (
@@ -329,14 +330,14 @@ def run_phewas(
             f"Perfect separation encountered for the phecode {phecode_name}. There were {case_count} cases and {control_count} controls for the phecode."
         )
 
-        return
+        return None
 
     # Lets add the counts to the results dictionary
     results.result["firth"] = results.firth_used
     results.result["case_count"] = case_count
     results.result["control_count"] = control_count
     results.result["exclusion_count"] = exclusion_count
-    return_dictionary[phecode_name] = results.result
+    return phecode_name, results.result
 
 
 def _generate_header(
@@ -365,39 +366,32 @@ def _generate_header(
     return header_str
 
 
-def _write_to_file(
+def _write_result_row(
     output_filehandle: io.TextIOWrapper,
+    phecode_name: str,
+    phecode_results: dict,
     status_name: str,
     phecode_descriptions: dict[str, str],
     covar_list: list[str],
-    results: DictProxy,
-    predictor_output_flipped: bool = False,
 ) -> None:
+    phecode_description, category = phecode_descriptions.get(
+        phecode_name, ("N/A", "N/A")
+    )
 
-    header = _generate_header(status_name, covar_list, predictor_output_flipped)
+    output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('exclusion_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}\t{phecode_results.get('firth', 'N/A')}"
 
-    output_filehandle.write(f"{header}\n")
+    # lets add all the values for the status to the string first
 
-    for phecode_name, phecode_results in results.items():
+    output_str += f"\t{phecode_results.get(status_name + '_pvalue', 'N/A')}"
+    output_str += f"\t{phecode_results.get(status_name + '_beta', 'N/A')}"
+    output_str += f"\t{phecode_results.get(status_name + '_stderr', 'N/A')}"
 
-        phecode_description, category = phecode_descriptions.get(
-            phecode_name, ("N/A", "N/A")
-        )
+    for covariate in covar_list:
+        output_str += f"\t{phecode_results.get(covariate + '_pvalue', 'N/A')}"
+        output_str += f"\t{phecode_results.get(covariate + '_beta', 'N/A')}"
+        output_str += f"\t{phecode_results.get(covariate + '_stderr', 'N/A')}"
 
-        output_str = f"{phecode_name}\t{phecode_description}\t{category}\t{phecode_results.get('case_count', 'N/A')}\t{phecode_results.get('control_count', 'N/A')}\t{phecode_results.get('exclusion_count', 'N/A')}\t{phecode_results.get('converged', 'N/A')}\t{phecode_results.get('firth', 'N/A')}"
-
-        # lets add all the values for the status to the string first
-
-        output_str += f"\t{phecode_results.get(status_name + '_pvalue', 'N/A')}"
-        output_str += f"\t{phecode_results.get(status_name + '_beta', 'N/A')}"
-        output_str += f"\t{phecode_results.get(status_name + '_stderr', 'N/A')}"
-
-        for covariate in covar_list:
-            output_str += f"\t{phecode_results.get(covariate + '_pvalue', 'N/A')}"
-            output_str += f"\t{phecode_results.get(covariate + '_beta', 'N/A')}"
-            output_str += f"\t{phecode_results.get(covariate + '_stderr', 'N/A')}"
-
-        output_filehandle.write(f"{output_str}\n")
+    output_filehandle.write(f"{output_str}\n")
 
 
 def read_in_phecode_descriptions(descriptions_filepath: Path | None) -> dict[str, str]:
@@ -554,7 +548,7 @@ def main() -> None:
     covariates_df = pl.read_csv(args.covariate_file)
 
     # Make a function here that checks if the correct columns are in the covariates df
-    if check_for_correct_cols(covariates_df, args.covariate_list):
+    if check_for_correct_cols(covariates_df.columns, args.covariate_list):
         err_msg = f"Error not all of the covariate columns that the user provided, {args.covariate_list}, were found in the covariate df"
         raise ValueError(err_msg)
 
@@ -574,22 +568,34 @@ def main() -> None:
         args.covariate_list, args.status_col, args.flip_predictor_and_outcome
     )
 
+    if args.flip_predictor_and_outcome:
+        status_col = "phecode"
+    else:
+        status_col = args.status_col
+
+    phecodes_tested = 0
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     with (
-        mp.get_context("spawn").Pool(maxtasksperchild=50, processes=args.cpus) as pool,
+        mp.get_context("spawn").Pool(
+            maxtasksperchild=50,
+            processes=args.cpus,
+            initializer=init_worker,
+            initargs=(covariates_df,),
+        ) as pool,
         xopen(args.output, "w") as output_file,
         tqdm(total=item_count, desc="phecodes processed") as pbar,
     ):
         signal.signal(signal.SIGINT, original_sigint_handler)
-        # We are going to create a manager and a dictionary to use in the regressions
-        manager = mp.Manager()
-        managed_dict = manager.dict()
+
+        # Write the header row first
+        header = _generate_header(
+            status_col, args.covariate_list, args.flip_predictor_and_outcome
+        )
+        output_file.write(f"{header}\n")
 
         # running the logistic regression for multiple phecodes
         partial_func = partial(
             run_phewas,
-            return_dictionary=managed_dict,
-            covariates=covariates_df.clone(),
             analysis_str=model_str,
             sample_colname=args.sample_col,
             min_case_count=args.min_case_count,
@@ -599,20 +605,29 @@ def main() -> None:
             regression_model=args.model,
         )
         try:
-            for _ in pool.imap(
+            for result in pool.imap(
                 partial_func, [(item,) for item in phecode_cases.items()]
             ):
+                if result:
+                    phecode_name, phecode_results = result
+                    _write_result_row(
+                        output_file,
+                        phecode_name,
+                        phecode_results,
+                        status_col,
+                        descriptions,
+                        args.covariate_list,
+                    )
+                    phecodes_tested += 1
                 pbar.update()
         except KeyboardInterrupt:
             print("Detected a keyboard interuption. Ending program now")
             pool.terminate()
             print(f"{30 * '~'}  PheWAS Finished!  {30 * '~'}")
             sys.exit(1)
-        else:
+        finally:
             pool.close()
             pool.join()
-
-        phecodes_tested = len(managed_dict)
 
         if phecodes_tested == 0:
             print("No phecodes were successfully tested. terminating program")
@@ -623,25 +638,7 @@ def main() -> None:
             f"recommend Bonferroni correction: {bonferroni} or {-np.log10(bonferroni)} on a -log10 scale"
         )
 
-        print(f"Writing the results of the PheWAS to the file: {args.output}")
-
-        # if we are using the phecodes as the predictor then
-        # we want out non covariate columns to just be "phecode_*"
-        if args.flip_predictor_and_outcome:
-            status_col = "phecode"
-        # If we are using our case/control file as predictors then we will use
-        # the status column of interest that we said
-        else:
-            status_col = args.status_col
-
-        _write_to_file(
-            output_file,
-            status_col,
-            descriptions,
-            args.covariate_list,
-            managed_dict,
-            args.flip_predictor_and_outcome,
-        )
+        print(f"PheWAS results have been written to: {args.output}")
 
     end_time = datetime.now()
     print(f"program finished at {end_time}")
