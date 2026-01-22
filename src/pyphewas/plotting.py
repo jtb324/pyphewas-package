@@ -83,15 +83,16 @@ def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> Formatt
         .item()
     )
 
-    infinity_adj_value = max_finite_val * 1.05
+    infinity_adj_value = max_finite_val * 1.02
 
-    print(f"replacing infinite values in the dataframe with {max_finite_val}")
+    print(f"replacing infinite values in the dataframe with {infinity_adj_value}")
 
     df = (
         df.with_columns(
             pl.when(~pl.col("neg_log10_p").is_finite())
             .then(infinity_adj_value)
             .otherwise(pl.col("neg_log10_p"))
+            .alias("neg_log10_p")
         )
         .with_columns(
             pl.when(pl.col(beta_colname) > 0)
@@ -103,7 +104,7 @@ def format_df(df: pl.DataFrame, pval_colname: str, beta_colname: str) -> Formatt
         .with_row_index(name="index")
     )
 
-    return FormattedDf(df, max_finite_val)
+    return FormattedDf(df, infinity_adj_value)
 
 
 def generate_manhatten(

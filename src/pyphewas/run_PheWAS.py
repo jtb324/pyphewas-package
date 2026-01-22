@@ -91,7 +91,8 @@ def generate_model_str(
         analysis_str = f"{status_col} ~ phecode_status"
 
     if covar_list:
-        analysis_str = f"{analysis_str} + {' + '.join(covar_list)}"
+        joined_covars = " + ".join(covar_list)
+        analysis_str = f"{analysis_str} + {joined_covars}"
 
     print(f"model being used: {analysis_str}")
     return analysis_str
@@ -204,6 +205,47 @@ def run_firth_regression(
     )
 
 
+def identify_separation_source(
+    df: pl.DataFrame,
+    analysis_str: str,
+) -> str | None:
+    """
+    Identify which predictor in the analysis string causes perfect separation.
+    Ignores continuous (float) predictors.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        The dataframe used in the regression.
+    analysis_str : str
+        The regression equation (e.g., 'outcome ~ predictor1 + predictor2').
+
+    Returns
+    -------
+    str | None
+        The name of the covariate causing separation, or None if not found.
+    """
+    parts = analysis_str.split("~")
+    outcome_col = parts[0].strip()
+    predictor_cols = [p.strip() for p in parts[1].split("+")]
+
+    for col in predictor_cols:
+        if col not in df.columns:
+            continue
+
+        dtype = df.schema[col]
+        if dtype in [pl.Float32, pl.Float64]:
+            continue
+
+        # Check if any value of the predictor has only 1 unique outcome
+        counts = df.group_by(col).agg(
+            pl.col(outcome_col).n_unique().alias("n_outcomes")
+        )
+        if counts.select((pl.col("n_outcomes") == 1).any()).item():
+            return col
+    return None
+
+
 def run_phewas(
     phecode_info: tuple,
     return_dictionary: DictProxy,
@@ -304,6 +346,14 @@ def run_phewas(
     if results.err is not None and regression_model == "logistic":
 
         _ = check_err(results.err)
+
+        sep_col = identify_separation_source(covariates_df, analysis_str)
+        if sep_col:
+            print(
+                f"Perfect separation encountered for the phecode {phecode_name} due to covariate: {sep_col}. Moving to next phecode."
+            )
+            return
+
         print(f"Using firth regression for the phecode, {phecode_name}.")
 
         results = run_firth_regression(
